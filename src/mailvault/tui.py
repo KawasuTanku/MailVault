@@ -11,6 +11,8 @@ from .sync import list_accounts
 
 
 class MailVaultTUI(App):
+    """Classic email client TUI."""
+
     CSS = """
     #main { height: 1fr; layout: horizontal; }
     #folders { width: 25%; border: solid $primary; padding: 1; }
@@ -23,12 +25,8 @@ class MailVaultTUI(App):
         ("/", "search", "Search"),
         ("q", "quit", "Quit"),
         ("s", "sync", "Sync"),
-        ("d", "delete", "Delete"),
-        ("r", "toggle_read", "Read/Unread"),
-        ("v", "view_raw", "View Raw"),
-        ("j", "cursor_down", "Down"),
-        ("k", "cursor_up", "Up"),
-        ("enter", "open_message", "Open"),
+        ("g", "go_top", "Top"),
+        ("G", "go_bottom", "Bottom"),
     ]
 
     def __init__(self, account=None, initial_query=None):
@@ -104,6 +102,7 @@ class MailVaultTUI(App):
         )
 
     def _show_detail(self, row_index):
+        """Show formatted message detail."""
         if row_index is None or row_index < 0 or row_index >= len(self._results):
             return
         row = self._results[row_index]
@@ -121,39 +120,8 @@ Seen: {'Yes' if row_data['seen'] else 'No'}
 """
             self.query_one("#detail", Static).update(text)
 
-    @on(DataTable.RowHighlighted)
-    def on_row_highlighted(self, event):
-        self._show_detail(event.cursor_row)
-
-    @on(DataTable.RowSelected)
-    def on_row_selected(self, event):
-        self._show_detail(event.cursor_row)
-
-    @on(Tree.NodeSelected)
-    def on_folder_selected(self, event):
-        if event.node.data:
-            self.account = event.node.data.get("account")
-            self.sub_title = self.account or "All Accounts"
-            self.query_messages("")
-
-    def action_search(self):
-        self.query_one("#search", Input).focus()
-
-    def action_cursor_down(self):
-        table = self.query_one("#messages", DataTable)
-        table.action_cursor_down()
-        self._show_detail(table.cursor_row)
-
-    def action_cursor_up(self):
-        table = self.query_one("#messages", DataTable)
-        table.action_cursor_up()
-        self._show_detail(table.cursor_row)
-
-    def action_open_message(self):
-        table = self.query_one("#messages", DataTable)
-        self._show_detail(table.cursor_row)
-
-    def action_view_raw(self):
+    def _show_raw(self):
+        """Show full raw RFC 5322 message (headers + body)."""
         table = self.query_one("#messages", DataTable)
         if table.cursor_row is None or not self._results:
             return
@@ -166,17 +134,7 @@ Seen: {'Yes' if row_data['seen'] else 'No'}
                 raw = raw.decode("utf-8", errors="replace")
             self.query_one("#detail", Static).update(raw[:5000])
 
-    def action_delete(self):
-        table = self.query_one("#messages", DataTable)
-        if table.cursor_row is None or not self._results:
-            return
-        row = self._results[table.cursor_row]
-        conn = get_db()
-        conn.execute("DELETE FROM messages WHERE id = ?", (row["id"],))
-        conn.commit()
-        self.query_messages("")
-
-    def action_toggle_read(self):
+    def _toggle_read(self):
         table = self.query_one("#messages", DataTable)
         if table.cursor_row is None or not self._results:
             return
@@ -186,6 +144,63 @@ Seen: {'Yes' if row_data['seen'] else 'No'}
         conn.execute("UPDATE messages SET seen = ? WHERE id = ?", (new_seen, row["id"]))
         conn.commit()
         self.query_messages("")
+
+    def _delete(self):
+        table = self.query_one("#messages", DataTable)
+        if table.cursor_row is None or not self._results:
+            return
+        row = self._results[table.cursor_row]
+        conn = get_db()
+        conn.execute("DELETE FROM messages WHERE id = ?", (row["id"],))
+        conn.commit()
+        self.query_messages("")
+
+    @on(Key)
+    def on_key(self, event: Key) -> None:
+        """Handle ALL key events at the app level."""
+        table = self.query_one("#messages", DataTable)
+        
+        if event.key == "j":
+            table.action_cursor_down()
+            self._show_detail(table.cursor_row)
+            event.prevent_default()
+        elif event.key == "k":
+            table.action_cursor_up()
+            self._show_detail(table.cursor_row)
+            event.prevent_default()
+        elif event.key == "enter":
+            self._show_detail(table.cursor_row)
+            event.prevent_default()
+        elif event.key == "v":
+            self._show_raw()
+            event.prevent_default()
+        elif event.key == "r":
+            self._toggle_read()
+            event.prevent_default()
+        elif event.key == "d":
+            self._delete()
+            event.prevent_default()
+
+    @on(Tree.NodeSelected)
+    def on_folder_selected(self, event):
+        if event.node.data:
+            self.account = event.node.data.get("account")
+            self.sub_title = self.account or "All Accounts"
+            self.query_messages("")
+
+    def action_search(self):
+        self.query_one("#search", Input).focus()
+
+    def action_go_top(self):
+        table = self.query_one("#messages", DataTable)
+        table.cursor_coordinate = (0, 0)
+        self._show_detail(0)
+
+    def action_go_bottom(self):
+        table = self.query_one("#messages", DataTable)
+        if table.row_count > 0:
+            table.cursor_coordinate = (table.row_count - 1, 0)
+            self._show_detail(table.row_count - 1)
 
     def action_sync(self):
         from .sync import get_envelopes, get_raw_message, parse_raw_message, HimalayaError
