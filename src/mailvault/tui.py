@@ -31,12 +31,8 @@ class MessageList(DataTable):
         Binding("d", "delete", "Delete"),
         Binding("r", "toggle_read", "Read/Unread"),
         Binding("v", "view_raw", "View Raw"),
+        Binding("enter", "open_message", "Open"),
     ]
-
-    class Selected(Message):
-        def __init__(self, row_key: str) -> None:
-            self.row_key = row_key
-            super().__init__()
 
 
 class MailVaultTUI(App):
@@ -173,23 +169,28 @@ class MailVaultTUI(App):
             f"Account: {self.account or 'All'}"
         )
 
-    def on_message_list_selected(self, event: MessageList.Selected) -> None:
-        row_id = event.row_key
-        conn = get_db()
-        row = conn.execute("SELECT * FROM messages WHERE id = ?", (row_id,)).fetchone()
-        if not row:
-            return
+    def on_data_table_cursor_moved(self, event: DataTable.CursorMoved) -> None:
+        """Show message detail when cursor moves (j/k navigation)."""
+        table = self.query_one("#messages", MessageList)
+        if table.cursor_row is not None and self._results:
+            row = self._results[table.cursor_row]
+            conn = get_db()
+            row_data = conn.execute("SELECT * FROM messages WHERE id = ?", (row["id"],)).fetchone()
+            if row_data:
+                text = f"""[bold]{row_data['subject']}[/bold]
+From: {row_data['from_name'] or ''} <{row_data['from_addr']}>
+To: {row_data['to_name'] or ''} <{row_data['to_addr']}>
+Date: {row_data['date']}
+Account: {row_data['account']}
+Seen: {'Yes' if row_data['seen'] else 'No'}
 
-        text = f"""[bold]{row['subject']}[/bold]
-From: {row['from_name'] or ''} <{row['from_addr']}>
-To: {row['to_name'] or ''} <{row['to_addr']}>
-Date: {row['date']}
-Account: {row['account']}
-Seen: {'Yes' if row['seen'] else 'No'}
-
-{row['body_text'] or '(no body)'}
+{row_data['body_text'] or '(no body)'}
 """
-        self.query_one("#detail", Static).update(text)
+                self.query_one("#detail", Static).update(text)
+
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        """Show message detail when row is selected (Enter)."""
+        self.on_data_table_cursor_moved(event)
 
     def on_folder_tree_selected(self, event: FolderTree.Selected) -> None:
         self.account = event.account
@@ -243,6 +244,25 @@ Seen: {'Yes' if row['seen'] else 'No'}
             if isinstance(raw, bytes):
                 raw = raw.decode("utf-8", errors="replace")
             self.query_one("#detail", Static).update(raw[:5000])
+
+    def action_open_message(self) -> None:
+        """Open selected message (triggered by Enter)."""
+        table = self.query_one("#messages", MessageList)
+        if table.cursor_row is not None and self._results:
+            row = self._results[table.cursor_row]
+            conn = get_db()
+            row_data = conn.execute("SELECT * FROM messages WHERE id = ?", (row["id"],)).fetchone()
+            if row_data:
+                text = f"""[bold]{row_data['subject']}[/bold]
+From: {row_data['from_name'] or ''} <{row_data['from_addr']}>
+To: {row_data['to_name'] or ''} <{row_data['to_addr']}>
+Date: {row_data['date']}
+Account: {row_data['account']}
+Seen: {'Yes' if row_data['seen'] else 'No'}
+
+{row_data['body_text'] or '(no body)'}
+"""
+                self.query_one("#detail", Static).update(text)
 
     def action_sync(self) -> None:
         from .sync import get_envelopes, get_raw_message, parse_raw_message, HimalayaError
