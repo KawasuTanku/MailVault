@@ -5,6 +5,7 @@ description = "Local email archive with full-text search"
 requires-python = ">=3.10"
 dependencies = [
     "click>=8.0",
+    "textual>=8.0",
 ]
 
 [project.scripts]

@@ -12,6 +12,7 @@ from .sync import (
     HimalayaError,
 )
 from .io import export_all, import_from_jsonl
+from .tui import run_tui
 
 
 @click.group()
@@ -193,6 +194,12 @@ def accounts():
     accs = list_accounts()
     for acc in accs:
         click.echo(f"{acc.get('name', 'default')} — {acc.get('email', '')}")
+
+
+@main.command()
+def tui():
+    """Launch the TUI."""
+    run_tui()
 
 
 @main.command()
