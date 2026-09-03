@@ -3,7 +3,7 @@
 import click
 from pathlib import Path
 
-from .db import get_db, init_db, search, stats, get_last_sync, insert_message
+from .db import get_db, init_db, search, stats, insert_message, is_message_id_synced, get_sync_state, update_sync_state
 from .sync import (
     list_accounts,
     get_envelopes,
@@ -29,9 +29,10 @@ def init():
 
 @main.command()
 @click.option("--account", "-a", help="Sync specific account (default: all)")
-@click.option("--full", is_flag=True, help="Full sync (ignore last sync date)")
-@click.option("--limit", "-l", default=50, help="Max messages to sync per account")
-def sync(account, full, limit):
+@click.option("--full", is_flag=True, help="Full sync (re-fetch all pages)")
+@click.option("--page-size", default=100, help="Page size for envelope fetching")
+@click.option("--max-pages", default=10, help="Max pages to sync per run")
+def sync(account, full, page_size, max_pages):
     """Sync emails from himalaya into MailVault."""
     conn = get_db()
     init_db(conn)
@@ -47,27 +48,50 @@ def sync(account, full, limit):
             continue
 
         click.echo(f"Syncing {acc_name}...")
+        sync_account(conn, acc_name, full=full, page_size=page_size, max_pages=max_pages)
+
+
+def sync_account(conn, acc_name: str, full: bool = False, page_size: int = 100, max_pages: int = 10) -> None:
+    """Sync a single account with pagination and Message-ID dedup."""
+    state = get_sync_state(conn, acc_name)
+    last_page = state.get("last_page", 0) if state else 0
+
+    page = 1 if full else max(1, last_page + 1)
+    total_new = 0
+    total_skipped = 0
+    total_pages = 0
+
+    while page <= max_pages:
         try:
-            envelopes = get_envelopes(account=acc_name)
+            envelopes, _ = get_envelopes(account=acc_name, page=page, page_size=page_size)
         except HimalayaError as e:
-            click.echo(f"  Error: {e}", err=True)
-            continue
+            click.echo(f"  Error fetching page {page}: {e}", err=True)
+            break
 
-        # Limit to most recent N
-        envelopes = envelopes[:limit]
+        if not envelopes:
+            break
 
-        new_count = 0
+        total_pages = page
+
         for env in envelopes:
             env_id = env.get("id", "")
             if not env_id:
                 continue
 
-            # Check if already synced
+            # Get Message-ID for dedup
+            msg_id = env.get("message-id", "")
+
+            # Check by Message-ID (globally unique)
+            if msg_id and is_message_id_synced(conn, msg_id):
+                total_skipped += 1
+                continue
+
+            # Also check by envelope_id (fast path)
             existing = conn.execute(
                 "SELECT id FROM messages WHERE account = ? AND envelope_id = ?",
                 (acc_name, env_id),
             ).fetchone()
-            if existing and not full:
+            if existing:
                 # Update seen status
                 flags = env.get("flags", [])
                 seen = 1 if any(f.get("iana") == "seen" for f in flags) else 0
@@ -75,13 +99,13 @@ def sync(account, full, limit):
                     "UPDATE messages SET seen = ? WHERE account = ? AND envelope_id = ?",
                     (seen, acc_name, env_id),
                 )
+                total_skipped += 1
                 continue
 
             try:
                 raw = get_raw_message(env_id, account=acc_name)
                 parsed = parse_raw_message(raw)
 
-                # Determine seen status from flags
                 flags = env.get("flags", [])
                 seen = 1 if any(f.get("iana") == "seen" for f in flags) else 0
 
@@ -101,14 +125,20 @@ def sync(account, full, limit):
                     "seen": seen,
                 }
                 insert_message(conn, msg)
-                new_count += 1
-                click.echo(f"  [{new_count}/{len(envelopes)}] {parsed['subject'][:60]}")
+                total_new += 1
+                click.echo(f"  [{total_new}] {parsed['subject'][:60]}")
             except HimalayaError as e:
                 click.echo(f"  Error fetching {env_id}: {e}", err=True)
                 continue
 
         conn.commit()
-        click.echo(f"  {acc_name}: {new_count} new messages synced ({len(envelopes)} envelopes checked)")
+        click.echo(f"  Page {page}: {total_new} new, {total_skipped} skipped")
+
+        page += 1
+
+    update_sync_state(conn, acc_name, total_pages, total_new, total_skipped)
+    conn.commit()
+    click.echo(f"  {acc_name}: {total_new} new, {total_skipped} skipped (pages: {total_pages})")
 
 
 @main.command()
@@ -142,6 +172,18 @@ def stats_cmd():
     click.echo(f"Total messages: {s['total']}")
     for acc, count in s.get("accounts", {}).items():
         click.echo(f"  {acc}: {count}")
+
+
+@main.command()
+def sync_state():
+    """Show sync state for all accounts."""
+    conn = get_db()
+    rows = conn.execute("SELECT * FROM sync_state ORDER BY account").fetchall()
+    if not rows:
+        click.echo("No sync state found.")
+        return
+    for r in rows:
+        click.echo(f"{r['account']}: {r['total_synced']} synced, {r['total_skipped']} skipped, last sync: {r['last_sync']}")
 
 
 @main.command()

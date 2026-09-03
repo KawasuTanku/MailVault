@@ -43,10 +43,19 @@ def list_accounts() -> list:
     return data.get("accounts", [])
 
 
-def get_envelopes(account: Optional[str] = None) -> list:
-    """Get envelope list from himalaya."""
-    data = run_himalaya_json(["envelope", "list"], account=account)
-    return data.get("envelopes", [])
+def get_envelopes(account: Optional[str] = None, page: int = 1, page_size: int = 100) -> tuple:
+    """Get envelope list from himalaya with pagination.
+    
+    Returns (envelopes, total_count) where total_count may be None
+    if the backend doesn't report it.
+    """
+    data = run_himalaya_json(
+        ["envelope", "list", "--page", str(page), "--page-size", str(page_size)],
+        account=account,
+    )
+    envelopes = data.get("envelopes", [])
+    total = data.get("total")
+    return envelopes, total
 
 
 def get_raw_message(envelope_id: str, account: Optional[str] = None) -> str:

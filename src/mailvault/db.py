@@ -27,7 +27,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             account TEXT NOT NULL,
             envelope_id TEXT NOT NULL,
-            message_id TEXT,
+            message_id TEXT UNIQUE,
             date TEXT,
             from_addr TEXT,
             from_name TEXT,
@@ -45,6 +45,15 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         CREATE INDEX IF NOT EXISTS idx_messages_account ON messages(account);
         CREATE INDEX IF NOT EXISTS idx_messages_date ON messages(date);
         CREATE INDEX IF NOT EXISTS idx_messages_message_id ON messages(message_id);
+
+        CREATE TABLE IF NOT EXISTS sync_state (
+            account TEXT PRIMARY KEY,
+            last_sync TEXT,
+            last_page INTEGER DEFAULT 0,
+            total_synced INTEGER DEFAULT 0,
+            total_skipped INTEGER DEFAULT 0,
+            updated_at TEXT DEFAULT (datetime('now'))
+        );
 
         CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
             subject,
@@ -89,7 +98,8 @@ def insert_message(conn: sqlite3.Connection, msg: dict) -> int:
             (account, envelope_id, message_id, date, from_addr, from_name,
              to_addr, to_name, subject, body_text, headers_json, raw_rfc5322, seen)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(account, envelope_id) DO UPDATE SET
+        ON CONFLICT(message_id) DO UPDATE SET
+            envelope_id=excluded.envelope_id,
             subject=excluded.subject,
             body_text=excluded.body_text,
             headers_json=excluded.headers_json,
@@ -105,6 +115,16 @@ def insert_message(conn: sqlite3.Connection, msg: dict) -> int:
     ))
     row_id = cursor.fetchone()[0]
     return row_id
+
+
+def is_message_id_synced(conn: sqlite3.Connection, message_id: str) -> bool:
+    """Check if a message is already synced by Message-ID."""
+    if not message_id:
+        return False
+    row = conn.execute(
+        "SELECT id FROM messages WHERE message_id = ?", (message_id,)
+    ).fetchone()
+    return row is not None
 
 
 def search(conn: sqlite3.Connection, query: str, account: Optional[str] = None, limit: int = 20) -> list:
@@ -135,9 +155,21 @@ def stats(conn: sqlite3.Connection) -> dict:
     return {"total": total, "accounts": per_account}
 
 
-def get_last_sync(conn: sqlite3.Connection, account: str) -> Optional[str]:
-    """Get the most recent message date for an account."""
-    row = conn.execute(
-        "SELECT MAX(date) FROM messages WHERE account = ?", (account,)
-    ).fetchone()
-    return row[0] if row else None
+def get_sync_state(conn: sqlite3.Connection, account: str) -> Optional[dict]:
+    """Get sync state for an account."""
+    row = conn.execute("SELECT * FROM sync_state WHERE account = ?", (account,)).fetchone()
+    return dict(row) if row else None
+
+
+def update_sync_state(conn: sqlite3.Connection, account: str, last_page: int, total_synced: int, total_skipped: int) -> None:
+    """Update sync state after a successful sync."""
+    conn.execute("""
+        INSERT INTO sync_state (account, last_sync, last_page, total_synced, total_skipped, updated_at)
+        VALUES (?, datetime('now'), ?, ?, ?, datetime('now'))
+        ON CONFLICT(account) DO UPDATE SET
+            last_sync=excluded.last_sync,
+            last_page=excluded.last_page,
+            total_synced=sync_state.total_synced + excluded.total_synced,
+            total_skipped=sync_state.total_skipped + excluded.total_skipped,
+            updated_at=excluded.updated_at
+    """, (account, last_page, total_synced, total_skipped))
