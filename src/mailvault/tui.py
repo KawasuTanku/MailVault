@@ -2,10 +2,9 @@
 
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, VerticalScroll
-from textual.widgets import DataTable, Footer, Header, Input, Static, Tree
+from textual.widgets import DataTable, Footer, Header, Input, Static, Tree, RichLog
 from textual import on
 from textual.events import Key
-from textual.markup import escape
 
 from .db import get_db, search, stats
 from .sync import list_accounts
@@ -42,7 +41,7 @@ class MailVaultTUI(App):
         yield Horizontal(
             Tree("Accounts", id="folders"),
             DataTable(id="messages"),
-            VerticalScroll(Static("Select a message to view details", id="detail"), id="detail-scroll"),
+            VerticalScroll(RichLog(id="detail", markup=False), id="detail-scroll"),
             id="main",
         )
         yield Static("", id="status")
@@ -110,7 +109,6 @@ class MailVaultTUI(App):
         conn = get_db()
         row_data = conn.execute("SELECT * FROM messages WHERE id = ?", (row["id"],)).fetchone()
         if row_data:
-            # Plain text only — no Textual markup to avoid parsing errors
             subject = row_data['subject'] or ''
             from_name = row_data['from_name'] or ''
             from_addr = row_data['from_addr'] or ''
@@ -132,8 +130,9 @@ Seen: {seen}
 
 {body}
 """
-            detail = self.query_one("#detail", Static)
-            detail.update(text)
+            detail = self.query_one("#detail", RichLog)
+            detail.clear()
+            detail.write(text)
             scroll = self.query_one("#detail-scroll", VerticalScroll)
             scroll.scroll_home()
 
@@ -149,8 +148,9 @@ Seen: {seen}
             raw = raw_row["raw_rfc5322"]
             if isinstance(raw, bytes):
                 raw = raw.decode("utf-8", errors="replace")
-            detail = self.query_one("#detail", Static)
-            detail.update(escape(raw[:5000]))
+            detail = self.query_one("#detail", RichLog)
+            detail.clear()
+            detail.write(raw[:5000])
             scroll = self.query_one("#detail-scroll", VerticalScroll)
             scroll.scroll_home()
 
