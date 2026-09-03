@@ -110,17 +110,20 @@ class MailVaultTUI(App):
         conn = get_db()
         row_data = conn.execute("SELECT * FROM messages WHERE id = ?", (row["id"],)).fetchone()
         if row_data:
-            subject = escape(row_data['subject'] or '')
-            from_name = escape(row_data['from_name'] or '')
-            from_addr = escape(row_data['from_addr'] or '')
-            to_name = escape(row_data['to_name'] or '')
-            to_addr = escape(row_data['to_addr'] or '')
-            date = escape(row_data['date'] or '')
-            account = escape(row_data['account'] or '')
-            body = escape(row_data['body_text'] or '(no body)')
+            # Plain text only — no Textual markup to avoid parsing errors
+            subject = row_data['subject'] or ''
+            from_name = row_data['from_name'] or ''
+            from_addr = row_data['from_addr'] or ''
+            to_name = row_data['to_name'] or ''
+            to_addr = row_data['to_addr'] or ''
+            date = row_data['date'] or ''
+            account = row_data['account'] or ''
+            body = row_data['body_text'] or '(no body)'
             seen = 'Yes' if row_data['seen'] else 'No'
 
-            text = f"""[bold]{subject}[/bold]
+            text = f"""{subject}
+{'=' * len(subject)}
+
 From: {from_name} <{from_addr}>
 To: {to_name} <{to_addr}>
 Date: {date}
@@ -131,7 +134,6 @@ Seen: {seen}
 """
             detail = self.query_one("#detail", Static)
             detail.update(text)
-            # Scroll to top when showing new message
             scroll = self.query_one("#detail-scroll", VerticalScroll)
             scroll.scroll_home()
 
