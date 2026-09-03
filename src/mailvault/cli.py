@@ -11,6 +11,7 @@ from .sync import (
     parse_raw_message,
     HimalayaError,
 )
+from .io import export_all, import_from_jsonl
 
 
 @click.group()
@@ -192,3 +193,20 @@ def accounts():
     accs = list_accounts()
     for acc in accs:
         click.echo(f"{acc.get('name', 'default')} — {acc.get('email', '')}")
+
+
+@main.command()
+@click.argument("output", required=False, type=click.Path())
+def export(output):
+    """Export all messages to JSONL. Defaults to stdout."""
+    out_path = Path(output) if output else None
+    count = export_all(out_path)
+    click.echo(f"Exported {count} messages.")
+
+
+@main.command()
+@click.argument("input_file", type=click.Path(exists=True))
+def import_(input_file):
+    """Import messages from JSONL file."""
+    count = import_from_jsonl(Path(input_file))
+    click.echo(f"Imported {count} messages.")
