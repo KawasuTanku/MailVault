@@ -2,43 +2,13 @@
 
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal
-from textual.widgets import DataTable, Footer, Header, Input, Static, Tree, Markdown
+from textual.widgets import DataTable, Footer, Header, Input, Static, Tree
 from textual.binding import Binding
 from textual.message import Message
+from textual import on
 
 from .db import get_db, search, stats
 from .sync import list_accounts
-
-
-class FolderTree(Tree):
-    """Folder/account tree on the left."""
-
-    class Selected(Message):
-        def __init__(self, account: str | None) -> None:
-            self.account = account
-            super().__init__()
-
-    def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
-        node = event.node
-        if node.data:
-            self.post_message(self.Selected(node.data.get("account")))
-
-
-class MessageList(DataTable):
-    """Message list — classic email client style."""
-
-    BINDINGS = [
-        Binding("d", "delete", "Delete"),
-        Binding("r", "toggle_read", "Read/Unread"),
-        Binding("v", "view_raw", "View Raw"),
-        Binding("enter", "open_message", "Open"),
-    ]
-
-    def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
-        """Notify app when row highlight changes."""
-        app = self.app
-        if hasattr(app, '_show_detail_for_cursor'):
-            app._show_detail_for_cursor()
 
 
 class MailVaultTUI(App):
@@ -94,6 +64,12 @@ class MailVaultTUI(App):
         Binding("g", "go_top", "Top"),
         Binding("G", "go_bottom", "Bottom"),
         Binding("s", "sync", "Sync"),
+        Binding("d", "delete", "Delete"),
+        Binding("r", "toggle_read", "Read/Unread"),
+        Binding("v", "view_raw", "View Raw"),
+        Binding("enter", "open_message", "Open"),
+        Binding("j", "cursor_down", "Down", show=False),
+        Binding("k", "cursor_up", "Up", show=False),
     ]
 
     def __init__(self, account: str | None = None, initial_query: str | None = None):
@@ -106,8 +82,8 @@ class MailVaultTUI(App):
         yield Header()
         yield Input(placeholder="Search... (press / to focus)", id="search")
         yield Horizontal(
-            FolderTree("Accounts", id="folders"),
-            MessageList(id="messages"),
+            Tree("Accounts", id="folders"),
+            DataTable(id="messages"),
             Static("Select a message to view details", id="detail"),
             id="main",
         )
@@ -121,10 +97,10 @@ class MailVaultTUI(App):
         self.query_messages(self.initial_query or "")
 
     def _populate_folders(self) -> None:
-        tree = self.query_one("#folders", FolderTree)
+        tree = self.query_one("#folders", Tree)
         root = tree.root
-        root.data = {"account": None}
         root.label = "All Accounts"
+        root.data = {"account": None}
         root.expand()
 
         for acc in list_accounts():
@@ -150,7 +126,7 @@ class MailVaultTUI(App):
         self._update_list()
 
     def _update_list(self) -> None:
-        table = self.query_one("#messages", MessageList)
+        table = self.query_one("#messages", DataTable)
         table.clear(columns=True)
 
         if not self._results:
@@ -175,15 +151,15 @@ class MailVaultTUI(App):
             f"Account: {self.account or 'All'}"
         )
 
-    def _show_detail_for_cursor(self) -> None:
-        """Show detail for the current cursor position."""
-        table = self.query_one("#messages", MessageList)
-        if table.cursor_row is not None and self._results:
-            row = self._results[table.cursor_row]
-            conn = get_db()
-            row_data = conn.execute("SELECT * FROM messages WHERE id = ?", (row["id"],)).fetchone()
-            if row_data:
-                text = f"""[bold]{row_data['subject']}[/bold]
+    def _show_detail_for_row(self, row_index: int) -> None:
+        """Show detail for a specific row index."""
+        if row_index < 0 or row_index >= len(self._results):
+            return
+        row = self._results[row_index]
+        conn = get_db()
+        row_data = conn.execute("SELECT * FROM messages WHERE id = ?", (row["id"],)).fetchone()
+        if row_data:
+            text = f"""[bold]{row_data['subject']}[/bold]
 From: {row_data['from_name'] or ''} <{row_data['from_addr']}>
 To: {row_data['to_name'] or ''} <{row_data['to_addr']}>
 Date: {row_data['date']}
@@ -192,35 +168,46 @@ Seen: {'Yes' if row_data['seen'] else 'No'}
 
 {row_data['body_text'] or '(no body)'}
 """
-                self.query_one("#detail", Static).update(text)
+            self.query_one("#detail", Static).update(text)
 
-    def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
+    @on(DataTable.RowHighlighted)
+    def on_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
         """Show message detail when row is highlighted (cursor moves)."""
-        self._show_detail_for_cursor()
+        self._show_detail_for_row(event.cursor_row)
 
-    def on_folder_tree_selected(self, event: FolderTree.Selected) -> None:
-        self.account = event.account
-        self.sub_title = self.account or "All Accounts"
-        self.query_messages("")
+    @on(DataTable.RowSelected)
+    def on_row_selected(self, event: DataTable.RowSelected) -> None:
+        """Show message detail when row is selected (Enter)."""
+        self._show_detail_for_row(event.cursor_row)
+
+    @on(Tree.NodeSelected)
+    def on_folder_selected(self, event: Tree.NodeSelected) -> None:
+        """Handle folder selection."""
+        if event.node.data:
+            self.account = event.node.data.get("account")
+            self.sub_title = self.account or "All Accounts"
+            self.query_messages("")
 
     def action_search(self) -> None:
         self.query_one("#search", Input).focus()
 
     def action_go_top(self) -> None:
-        table = self.query_one("#messages", MessageList)
+        table = self.query_one("#messages", DataTable)
         table.cursor_coordinate = (0, 0)
 
     def action_go_bottom(self) -> None:
-        table = self.query_one("#messages", MessageList)
+        table = self.query_one("#messages", DataTable)
         if table.row_count > 0:
             table.cursor_coordinate = (table.row_count - 1, 0)
 
     def action_open_message(self) -> None:
         """Open selected message (triggered by Enter)."""
-        self._show_detail_for_cursor()
+        table = self.query_one("#messages", DataTable)
+        if table.cursor_row is not None:
+            self._show_detail_for_row(table.cursor_row)
 
     def action_delete(self) -> None:
-        table = self.query_one("#messages", MessageList)
+        table = self.query_one("#messages", DataTable)
         if table.cursor_row is None or not self._results:
             return
         row = self._results[table.cursor_row]
@@ -230,7 +217,7 @@ Seen: {'Yes' if row_data['seen'] else 'No'}
         self.query_messages("")
 
     def action_toggle_read(self) -> None:
-        table = self.query_one("#messages", MessageList)
+        table = self.query_one("#messages", DataTable)
         if table.cursor_row is None or not self._results:
             return
         row = self._results[table.cursor_row]
@@ -241,7 +228,7 @@ Seen: {'Yes' if row_data['seen'] else 'No'}
         self.query_messages("")
 
     def action_view_raw(self) -> None:
-        table = self.query_one("#messages", MessageList)
+        table = self.query_one("#messages", DataTable)
         if table.cursor_row is None or not self._results:
             return
         row = self._results[table.cursor_row]
