@@ -1,0 +1,18 @@
+[project]
+name = "mailvault"
+version = "0.1.0"
+description = "Local email archive with full-text search"
+requires-python = ">=3.10"
+dependencies = [
+    "click>=8.0",
+]
+
+[project.scripts]
+mailvault = "mailvault.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mailvault"]

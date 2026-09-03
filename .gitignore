@@ -1,0 +1,15 @@
+# Project files
+__pycache__/
+*.pyc
+.venv/
+
+# Data
+data/
+*.db
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
