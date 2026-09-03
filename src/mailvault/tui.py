@@ -5,6 +5,7 @@ from textual.containers import Horizontal
 from textual.widgets import DataTable, Footer, Header, Input, Static, Tree
 from textual import on
 from textual.events import Key
+from textual.markup import escape
 
 from .db import get_db, search, stats
 from .sync import list_accounts
@@ -109,14 +110,25 @@ class MailVaultTUI(App):
         conn = get_db()
         row_data = conn.execute("SELECT * FROM messages WHERE id = ?", (row["id"],)).fetchone()
         if row_data:
-            text = f"""[bold]{row_data['subject']}[/bold]
-From: {row_data['from_name'] or ''} <{row_data['from_addr']}>
-To: {row_data['to_name'] or ''} <{row_data['to_addr']}>
-Date: {row_data['date']}
-Account: {row_data['account']}
-Seen: {'Yes' if row_data['seen'] else 'No'}
+            # Escape all content to prevent Textual markup parsing errors
+            subject = escape(row_data['subject'] or '')
+            from_name = escape(row_data['from_name'] or '')
+            from_addr = escape(row_data['from_addr'] or '')
+            to_name = escape(row_data['to_name'] or '')
+            to_addr = escape(row_data['to_addr'] or '')
+            date = escape(row_data['date'] or '')
+            account = escape(row_data['account'] or '')
+            body = escape(row_data['body_text'] or '(no body)')
+            seen = 'Yes' if row_data['seen'] else 'No'
 
-{row_data['body_text'] or '(no body)'}
+            text = f"""[bold]{subject}[/bold]
+From: {from_name} <{from_addr}>
+To: {to_name} <{to_addr}>
+Date: {date}
+Account: {account}
+Seen: {seen}
+
+{body}
 """
             self.query_one("#detail", Static).update(text)
 
@@ -132,7 +144,8 @@ Seen: {'Yes' if row_data['seen'] else 'No'}
             raw = raw_row["raw_rfc5322"]
             if isinstance(raw, bytes):
                 raw = raw.decode("utf-8", errors="replace")
-            self.query_one("#detail", Static).update(raw[:5000])
+            # Escape to prevent markup parsing issues
+            self.query_one("#detail", Static).update(escape(raw[:5000]))
 
     def _toggle_read(self):
         table = self.query_one("#messages", DataTable)
