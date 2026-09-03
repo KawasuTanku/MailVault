@@ -1,7 +1,7 @@
 """Textual TUI for MailVault — classic email client feel."""
 
 from textual.app import App, ComposeResult
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal
 from textual.widgets import DataTable, Footer, Header, Input, Static, Tree
 from textual.binding import Binding
 from textual.message import Message
@@ -169,8 +169,8 @@ class MailVaultTUI(App):
             f"Account: {self.account or 'All'}"
         )
 
-    def on_data_table_cursor_moved(self, event: DataTable.CursorMoved) -> None:
-        """Show message detail when cursor moves (j/k navigation)."""
+    def _show_detail_for_cursor(self) -> None:
+        """Show detail for the current cursor position."""
         table = self.query_one("#messages", MessageList)
         if table.cursor_row is not None and self._results:
             row = self._results[table.cursor_row]
@@ -188,9 +188,9 @@ Seen: {'Yes' if row_data['seen'] else 'No'}
 """
                 self.query_one("#detail", Static).update(text)
 
-    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
-        """Show message detail when row is selected (Enter)."""
-        self.on_data_table_cursor_moved(event)
+    def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
+        """Show message detail when row is highlighted (cursor moves)."""
+        self._show_detail_for_cursor()
 
     def on_folder_tree_selected(self, event: FolderTree.Selected) -> None:
         self.account = event.account
@@ -208,6 +208,10 @@ Seen: {'Yes' if row_data['seen'] else 'No'}
         table = self.query_one("#messages", MessageList)
         if table.row_count > 0:
             table.cursor_coordinate = (table.row_count - 1, 0)
+
+    def action_open_message(self) -> None:
+        """Open selected message (triggered by Enter)."""
+        self._show_detail_for_cursor()
 
     def action_delete(self) -> None:
         table = self.query_one("#messages", MessageList)
@@ -244,25 +248,6 @@ Seen: {'Yes' if row_data['seen'] else 'No'}
             if isinstance(raw, bytes):
                 raw = raw.decode("utf-8", errors="replace")
             self.query_one("#detail", Static).update(raw[:5000])
-
-    def action_open_message(self) -> None:
-        """Open selected message (triggered by Enter)."""
-        table = self.query_one("#messages", MessageList)
-        if table.cursor_row is not None and self._results:
-            row = self._results[table.cursor_row]
-            conn = get_db()
-            row_data = conn.execute("SELECT * FROM messages WHERE id = ?", (row["id"],)).fetchone()
-            if row_data:
-                text = f"""[bold]{row_data['subject']}[/bold]
-From: {row_data['from_name'] or ''} <{row_data['from_addr']}>
-To: {row_data['to_name'] or ''} <{row_data['to_addr']}>
-Date: {row_data['date']}
-Account: {row_data['account']}
-Seen: {'Yes' if row_data['seen'] else 'No'}
-
-{row_data['body_text'] or '(no body)'}
-"""
-                self.query_one("#detail", Static).update(text)
 
     def action_sync(self) -> None:
         from .sync import get_envelopes, get_raw_message, parse_raw_message, HimalayaError
