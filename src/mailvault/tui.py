@@ -1,12 +1,10 @@
 """Textual TUI for MailVault — classic email client feel."""
 
 from textual.app import App, ComposeResult
-from textual.containers import Horizontal, Vertical, ScrollableContainer
-from textual.widgets import DataTable, Footer, Header, Input, Static, Tree, Label
+from textual.containers import Horizontal, Vertical
+from textual.widgets import DataTable, Footer, Header, Input, Static, Tree
 from textual.binding import Binding
 from textual.message import Message
-from textual import on
-from textual.color import Color
 
 from .db import get_db, search, stats
 from .sync import list_accounts
@@ -14,12 +12,6 @@ from .sync import list_accounts
 
 class FolderTree(Tree):
     """Folder/account tree on the left."""
-
-    BINDINGS = [
-        Binding("j", "cursor_down", "Down", show=False),
-        Binding("k", "cursor_up", "Up", show=False),
-        Binding("enter", "select_folder", "Select"),
-    ]
 
     class Selected(Message):
         def __init__(self, account: str | None) -> None:
@@ -36,26 +28,15 @@ class MessageList(DataTable):
     """Message list — classic email client style."""
 
     BINDINGS = [
-        Binding("j", "cursor_down", "Down", show=False),
-        Binding("k", "cursor_up", "Up", show=False),
         Binding("d", "delete", "Delete"),
         Binding("r", "toggle_read", "Read/Unread"),
         Binding("v", "view_raw", "View Raw"),
-        Binding("enter", "open_message", "Open"),
     ]
 
     class Selected(Message):
         def __init__(self, row_key: str) -> None:
             self.row_key = row_key
             super().__init__()
-
-
-class MessageDetail(ScrollableContainer):
-    """Message detail pane."""
-
-
-class StatusBar(Static):
-    """Status bar at the bottom."""
 
 
 class MailVaultTUI(App):
@@ -91,6 +72,7 @@ class MailVaultTUI(App):
         height: 100%;
         border: solid $primary;
         padding: 1;
+        overflow-y: auto;
     }
     
     #status {
@@ -99,21 +81,7 @@ class MailVaultTUI(App):
         padding: 0 1;
     }
     
-    #search {
-        height: 3;
-        border: solid $primary;
-        padding: 0 1;
-    }
-    
     DataTable {
-        height: 100%;
-    }
-    
-    DataTable > .datatable--cursor {
-        background: $accent;
-    }
-    
-    .folder-tree {
         height: 100%;
     }
     """
@@ -124,7 +92,6 @@ class MailVaultTUI(App):
         Binding("g", "go_top", "Top"),
         Binding("G", "go_bottom", "Bottom"),
         Binding("s", "sync", "Sync"),
-        Binding("a", "accounts", "Accounts"),
     ]
 
     def __init__(self, account: str | None = None, initial_query: str | None = None):
@@ -139,10 +106,10 @@ class MailVaultTUI(App):
         yield Horizontal(
             FolderTree("Accounts", id="folders"),
             MessageList(id="messages"),
-            MessageDetail(id="detail"),
+            Static("Select a message to view details", id="detail"),
             id="main",
         )
-        yield StatusBar("", id="status")
+        yield Static("", id="status")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -152,22 +119,19 @@ class MailVaultTUI(App):
         self.query_messages(self.initial_query or "")
 
     def _populate_folders(self) -> None:
-        """Populate the folder tree."""
         tree = self.query_one("#folders", FolderTree)
         root = tree.root
-        root.data = {"account": None, "name": "All Accounts"}
+        root.data = {"account": None}
         root.label = "All Accounts"
         root.expand()
 
-        accounts = list_accounts()
-        for acc in accounts:
-            node = root.add_leaf(
+        for acc in list_accounts():
+            root.add_leaf(
                 f"{acc.get('name', 'default')} ({acc.get('email', '')})",
                 data={"account": acc.get("name", "default")},
             )
 
     def query_messages(self, query: str) -> None:
-        """Run a search and update the list."""
         conn = get_db()
         if query:
             results = search(conn, query, account=self.account, limit=100)
@@ -178,14 +142,12 @@ class MailVaultTUI(App):
                 sql += " WHERE account = ?"
                 params.append(self.account)
             sql += " ORDER BY date DESC LIMIT 100"
-            rows = conn.execute(sql, params).fetchall()
-            results = [dict(r) for r in rows]
+            results = [dict(r) for r in conn.execute(sql, params).fetchall()]
 
         self._results = results
-        self.update_list()
+        self._update_list()
 
-    def update_list(self) -> None:
-        """Update the data table with current results."""
+    def _update_list(self) -> None:
         table = self.query_one("#messages", MessageList)
         table.clear(columns=True)
 
@@ -199,38 +161,24 @@ class MailVaultTUI(App):
             table.add_row(
                 seen,
                 r.get("from_name") or r.get("from_addr", ""),
-                r.get("subject", "")[:40],
-                r.get("date", "")[:16],
-                key=r.get("id", ""),
+                (r.get("subject") or "")[:40],
+                (r.get("date") or "")[:16],
+                key=str(r.get("id", "")),
             )
 
-        # Update status
         stats_data = stats(get_db())
-        status = self.query_one("#status", StatusBar)
-        status.update(
+        self.query_one("#status", Static).update(
             f"Total: {stats_data['total']} | "
             f"Showing: {len(self._results)} | "
             f"Account: {self.account or 'All'}"
         )
 
     def on_message_list_selected(self, event: MessageList.Selected) -> None:
-        """Show message detail when selected."""
         row_id = event.row_key
         conn = get_db()
         row = conn.execute("SELECT * FROM messages WHERE id = ?", (row_id,)).fetchone()
         if not row:
             return
-
-        detail = self.query_one("#detail", MessageDetail)
-        detail.remove_children()
-
-        headers = row["headers_json"]
-        if isinstance(headers, str):
-            import json as json_mod
-            try:
-                headers = json_mod.loads(headers)
-            except Exception:
-                headers = {}
 
         text = f"""[bold]{row['subject']}[/bold]
 From: {row['from_name'] or ''} <{row['from_addr']}>
@@ -241,16 +189,14 @@ Seen: {'Yes' if row['seen'] else 'No'}
 
 {row['body_text'] or '(no body)'}
 """
-        detail.mount(Static(text))
+        self.query_one("#detail", Static).update(text)
 
     def on_folder_tree_selected(self, event: FolderTree.Selected) -> None:
-        """Handle folder selection."""
         self.account = event.account
         self.sub_title = self.account or "All Accounts"
         self.query_messages("")
 
     def action_search(self) -> None:
-        """Focus the search input."""
         self.query_one("#search", Input).focus()
 
     def action_go_top(self) -> None:
@@ -259,10 +205,10 @@ Seen: {'Yes' if row['seen'] else 'No'}
 
     def action_go_bottom(self) -> None:
         table = self.query_one("#messages", MessageList)
-        table.action_last()
+        if table.row_count > 0:
+            table.cursor_coordinate = (table.row_count - 1, 0)
 
     def action_delete(self) -> None:
-        """Delete selected message."""
         table = self.query_one("#messages", MessageList)
         if table.cursor_row is None or not self._results:
             return
@@ -273,22 +219,17 @@ Seen: {'Yes' if row['seen'] else 'No'}
         self.query_messages("")
 
     def action_toggle_read(self) -> None:
-        """Toggle seen status of selected message."""
         table = self.query_one("#messages", MessageList)
         if table.cursor_row is None or not self._results:
             return
         row = self._results[table.cursor_row]
         conn = get_db()
         new_seen = 0 if row["seen"] else 1
-        conn.execute(
-            "UPDATE messages SET seen = ? WHERE id = ?",
-            (new_seen, row["id"]),
-        )
+        conn.execute("UPDATE messages SET seen = ? WHERE id = ?", (new_seen, row["id"]))
         conn.commit()
         self.query_messages("")
 
     def action_view_raw(self) -> None:
-        """View raw RFC 5322 message."""
         table = self.query_one("#messages", MessageList)
         if table.cursor_row is None or not self._results:
             return
@@ -301,18 +242,14 @@ Seen: {'Yes' if row['seen'] else 'No'}
             raw = raw_row["raw_rfc5322"]
             if isinstance(raw, bytes):
                 raw = raw.decode("utf-8", errors="replace")
-            detail = self.query_one("#detail", MessageDetail)
-            detail.remove_children()
-            detail.mount(Static(raw[:5000]))
+            self.query_one("#detail", Static).update(raw[:5000])
 
     def action_sync(self) -> None:
-        """Trigger a sync."""
         from .sync import get_envelopes, get_raw_message, parse_raw_message, HimalayaError
-        from .db import insert_message, is_message_id_synced, update_sync_state, get_sync_state
+        from .db import insert_message, is_message_id_synced, update_sync_state
 
         conn = get_db()
-        accounts = list_accounts()
-        for acc in accounts:
+        for acc in list_accounts():
             acc_name = acc.get("name", "default")
             if self.account and acc_name != self.account:
                 continue
@@ -336,7 +273,7 @@ Seen: {'Yes' if row['seen'] else 'No'}
                     parsed = parse_raw_message(raw)
                     flags = env.get("flags", [])
                     seen = 1 if any(f.get("iana") == "seen" for f in flags) else 0
-                    msg = {
+                    insert_message(conn, {
                         "account": acc_name,
                         "envelope_id": env_id,
                         "message_id": parsed["message_id"],
@@ -350,8 +287,7 @@ Seen: {'Yes' if row['seen'] else 'No'}
                         "headers_json": parsed["headers"],
                         "raw_rfc5322": raw,
                         "seen": seen,
-                    }
-                    insert_message(conn, msg)
+                    })
                     new_count += 1
                 except HimalayaError:
                     continue
@@ -361,18 +297,6 @@ Seen: {'Yes' if row['seen'] else 'No'}
 
         self.query_messages("")
 
-    def action_accounts(self) -> None:
-        """Show accounts."""
-        accounts = list_accounts()
-        detail = self.query_one("#detail", MessageDetail)
-        detail.remove_children()
-        text = "Configured Accounts:\n\n"
-        for acc in accounts:
-            text += f"  {acc.get('name', 'default')} — {acc.get('email', '')}\n"
-        detail.mount(Static(text))
-
 
 def run_tui(account: str | None = None, query: str | None = None) -> None:
-    """Run the TUI."""
-    app = MailVaultTUI(account=account, initial_query=query)
-    app.run()
+    MailVaultTUI(account=account, initial_query=query).run()
