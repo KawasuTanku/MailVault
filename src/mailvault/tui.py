@@ -1,7 +1,7 @@
 """Textual TUI for MailVault."""
 
 from textual.app import App, ComposeResult
-from textual.containers import Horizontal
+from textual.containers import Horizontal, VerticalScroll
 from textual.widgets import DataTable, Footer, Header, Input, Static, Tree
 from textual import on
 from textual.events import Key
@@ -42,7 +42,7 @@ class MailVaultTUI(App):
         yield Horizontal(
             Tree("Accounts", id="folders"),
             DataTable(id="messages"),
-            Static("Select a message to view details", id="detail"),
+            VerticalScroll(Static("Select a message to view details", id="detail"), id="detail-scroll"),
             id="main",
         )
         yield Static("", id="status")
@@ -110,7 +110,6 @@ class MailVaultTUI(App):
         conn = get_db()
         row_data = conn.execute("SELECT * FROM messages WHERE id = ?", (row["id"],)).fetchone()
         if row_data:
-            # Escape all content to prevent Textual markup parsing errors
             subject = escape(row_data['subject'] or '')
             from_name = escape(row_data['from_name'] or '')
             from_addr = escape(row_data['from_addr'] or '')
@@ -130,7 +129,11 @@ Seen: {seen}
 
 {body}
 """
-            self.query_one("#detail", Static).update(text)
+            detail = self.query_one("#detail", Static)
+            detail.update(text)
+            # Scroll to top when showing new message
+            scroll = self.query_one("#detail-scroll", VerticalScroll)
+            scroll.scroll_home()
 
     def _show_raw(self):
         """Show full raw RFC 5322 message (headers + body)."""
@@ -144,8 +147,10 @@ Seen: {seen}
             raw = raw_row["raw_rfc5322"]
             if isinstance(raw, bytes):
                 raw = raw.decode("utf-8", errors="replace")
-            # Escape to prevent markup parsing issues
-            self.query_one("#detail", Static).update(escape(raw[:5000]))
+            detail = self.query_one("#detail", Static)
+            detail.update(escape(raw[:5000]))
+            scroll = self.query_one("#detail-scroll", VerticalScroll)
+            scroll.scroll_home()
 
     def _toggle_read(self):
         table = self.query_one("#messages", DataTable)
