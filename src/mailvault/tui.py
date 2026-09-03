@@ -2,7 +2,7 @@
 
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal
-from textual.widgets import DataTable, Footer, Header, Input, Static, Tree
+from textual.widgets import DataTable, Footer, Header, Input, Static, Tree, Markdown
 from textual.binding import Binding
 from textual.message import Message
 
@@ -33,6 +33,12 @@ class MessageList(DataTable):
         Binding("v", "view_raw", "View Raw"),
         Binding("enter", "open_message", "Open"),
     ]
+
+    def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
+        """Notify app when row highlight changes."""
+        app = self.app
+        if hasattr(app, '_show_detail_for_cursor'):
+            app._show_detail_for_cursor()
 
 
 class MailVaultTUI(App):
