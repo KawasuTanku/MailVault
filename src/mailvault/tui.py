@@ -177,8 +177,10 @@ Seen: {'Yes' if row_data['seen'] else 'No'}
 
     @on(DataTable.RowSelected)
     def on_row_selected(self, event: DataTable.RowSelected) -> None:
-        """Show message detail when row is selected (Enter)."""
-        self._show_detail_for_row(event.cursor_row)
+        """Show message detail when row is selected (Enter key)."""
+        table = self.query_one("#messages", DataTable)
+        if table.cursor_row is not None:
+            self._show_detail_for_row(table.cursor_row)
 
     @on(Tree.NodeSelected)
     def on_folder_selected(self, event: Tree.NodeSelected) -> None:
