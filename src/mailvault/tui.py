@@ -189,6 +189,11 @@ Seen: {seen}
     @on(Key)
     def on_key(self, event: Key) -> None:
         """Handle ALL key events at the app level."""
+        # Don't intercept keys when search input is focused
+        search = self.query_one("#search", Input)
+        if search.has_focus:
+            return
+
         table = self.query_one("#messages", DataTable)
         
         if event.key == "j":
