@@ -47,7 +47,7 @@ def reprocess(account, dry_run, verbose):
         
         # Re-parse the raw message
         from .sync import parse_raw_message
-        parsed = parse_raw_message(raw)
+        parsed = parse_raw_message(raw.decode("utf-8", errors="replace"))
         
         # Update the database
         if not dry_run:
