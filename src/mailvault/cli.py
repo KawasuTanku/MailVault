@@ -130,13 +130,14 @@ def sync_account(conn, acc_name: str, full: bool = False, page_size: int = 100, 
                     "to_name": parsed["to_name"],
                     "subject": parsed["subject"],
                     "body_text": parsed["body_text"],
+                    "body_html": parsed["body_html"],
                     "headers_json": parsed["headers"],
                     "raw_rfc5322": raw,
                     "seen": seen,
                 }
                 insert_message(conn, msg)
                 total_new += 1
-                click.echo(f"  [{total_new}] {parsed['subject'][:60]}")
+                click.echo(f"  [{total_new}] ({env_id}) {parsed['subject'][:60]}")
             except HimalayaError as e:
                 click.echo(f"  Error fetching {env_id}: {e}", err=True)
                 continue
