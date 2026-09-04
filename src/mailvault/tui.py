@@ -140,9 +140,8 @@ class MailVaultTUI(App):
                     body = h.handle(body_html)
                 except ImportError:
                     body = body_html
-            text = f"""{subject}
-{'=' * len(subject)}
-
+            text = f"""ID: {row['id']}
+Subject: {subject}
 From: {from_name} <{from_addr}>
 To: {to_name} <{to_addr}>
 Date: {date}
