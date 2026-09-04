@@ -86,17 +86,26 @@ def parse_raw_message(raw: str) -> dict:
 
     # Extract plain text body
     body_text = ""
+    body_html = ""
     if msg.is_multipart():
         for part in msg.walk():
-            if part.get_content_type() == "text/plain" and not part.get_filename():
+            content_type = part.get_content_type()
+            if content_type == "text/plain" and not part.get_filename() and not body_text:
                 payload = part.get_payload(decode=True)
                 if payload:
                     body_text = payload.decode(part.get_content_charset() or "utf-8", errors="replace")
-                break
+            elif content_type == "text/html" and not part.get_filename() and not body_html:
+                payload = part.get_payload(decode=True)
+                if payload:
+                    body_html = payload.decode(part.get_content_charset() or "utf-8", errors="replace")
     else:
         payload = msg.get_payload(decode=True)
         if payload:
-            body_text = payload.decode(msg.get_content_charset() or "utf-8", errors="replace")
+            body = payload.decode(msg.get_content_charset() or "utf-8", errors="replace")
+            if msg.get_content_type() == "text/html":
+                body_html = body
+            else:
+                body_text = body
 
     # Build headers dict
     headers = {}
@@ -112,5 +121,6 @@ def parse_raw_message(raw: str) -> dict:
         "to_name": decode_mime_header(to_name),
         "subject": decode_mime_header(msg.get("Subject", "")),
         "body_text": body_text,
+        "body_html": body_html,
         "headers": headers,
     }

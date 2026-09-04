@@ -35,6 +35,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
             to_name TEXT,
             subject TEXT,
             body_text TEXT,
+            body_html TEXT,
             headers_json TEXT NOT NULL,
             raw_rfc5322 BLOB,
             seen INTEGER DEFAULT 0,
@@ -96,12 +97,13 @@ def insert_message(conn: sqlite3.Connection, msg: dict) -> int:
     cursor = conn.execute("""
         INSERT INTO messages
             (account, envelope_id, message_id, date, from_addr, from_name,
-             to_addr, to_name, subject, body_text, headers_json, raw_rfc5322, seen)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             to_addr, to_name, subject, body_text, body_html, headers_json, raw_rfc5322, seen)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(message_id) DO UPDATE SET
             envelope_id=excluded.envelope_id,
             subject=excluded.subject,
             body_text=excluded.body_text,
+            body_html=excluded.body_html,
             headers_json=excluded.headers_json,
             raw_rfc5322=excluded.raw_rfc5322,
             seen=excluded.seen
@@ -110,7 +112,7 @@ def insert_message(conn: sqlite3.Connection, msg: dict) -> int:
         msg["account"], msg["envelope_id"], msg.get("message_id"),
         msg.get("date"), msg.get("from_addr"), msg.get("from_name"),
         msg.get("to_addr"), msg.get("to_name"), msg.get("subject"),
-        msg.get("body_text"), headers_json, raw_blob,
+        msg.get("body_text"), msg.get("body_html"), headers_json, raw_blob,
         msg.get("seen", 0),
     ))
     row_id = cursor.fetchone()[0]

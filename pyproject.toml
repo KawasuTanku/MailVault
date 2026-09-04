@@ -6,6 +6,7 @@ requires-python = ">=3.10"
 dependencies = [
     "click>=8.0",
     "textual>=8.0",
+    "html2text>=2020.1.16",
 ]
 
 [project.scripts]

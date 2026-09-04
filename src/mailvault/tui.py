@@ -17,7 +17,7 @@ class MailVaultTUI(App):
     #main { height: 1fr; layout: horizontal; }
     #folders { width: 25%; border: solid $primary; padding: 1; }
     #messages { width: 35%; border: solid $primary; }
-    #detail { width: 40%; border: solid $primary; padding: 1; overflow-y: auto; }
+    #detail { width: 1fr; border: solid $primary; padding: 1; overflow-y: auto; }
     #status { height: 3; border: solid $primary; padding: 0 1; }
     """
 
@@ -116,8 +116,19 @@ class MailVaultTUI(App):
             to_addr = row_data['to_addr'] or ''
             date = row_data['date'] or ''
             account = row_data['account'] or ''
-            body = row_data['body_text'] or '(no body)'
             seen = 'Yes' if row_data['seen'] else 'No'
+
+            # Prefer HTML body, convert to text if available
+            body = row_data['body_text'] or ''
+            body_html = row_data['body_html'] or ''
+            if body_html:
+                try:
+                    import html2text
+                    h = html2text.HTML2Text()
+                    h.body_width = 0  # Don't wrap lines
+                    body = h.handle(body_html)
+                except ImportError:
+                    body = body_html  # Fallback to raw HTML
 
             text = f"""{subject}
 {'=' * len(subject)}
@@ -251,7 +262,8 @@ Seen: {seen}
                         "account": acc_name, "envelope_id": env_id, "message_id": parsed["message_id"],
                         "date": parsed["date"], "from_addr": parsed["from_addr"], "from_name": parsed["from_name"],
                         "to_addr": parsed["to_addr"], "to_name": parsed["to_name"], "subject": parsed["subject"],
-                        "body_text": parsed["body_text"], "headers_json": parsed["headers"],
+                        "body_text": parsed["body_text"], "body_html": parsed.get("body_html", ""),
+                        "headers_json": parsed["headers"],
                         "raw_rfc5322": raw, "seen": seen,
                     })
                     new_count += 1
