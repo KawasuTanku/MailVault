@@ -1,4 +1,4 @@
-"""Textual TUI for MailVault — clean implementation."""
+"""Textual TUI for MailVault — minimal working version."""
 
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, VerticalScroll
@@ -167,6 +167,41 @@ Seen: {seen}
         self.query_messages(event.value)
         self.query_one("#messages", DataTable).focus()
 
+    @on(Key)
+    def on_key(self, event: Key) -> None:
+        """Handle key events at app level."""
+        # Don't intercept keys when search input is focused
+        search = self.query_one("#search", Input)
+        if search.has_focus:
+            return
+            
+        table = self.query_one("#messages", DataTable)
+        
+        if event.key == "j":
+            table.action_cursor_down()
+            self._show_detail(table.cursor_row)
+            event.prevent_default()
+        elif event.key == "k":
+            table.action_cursor_up()
+            self._show_detail(table.cursor_row)
+            event.prevent_default()
+        elif event.key == "enter":
+            if table.cursor_row is not None:
+                self._show_detail(table.cursor_row)
+            elif self._results:
+                table.cursor_coordinate = (0, 0)
+                self._show_detail(0)
+            event.prevent_default()
+        elif event.key == "v":
+            self._show_raw()
+            event.prevent_default()
+        elif event.key == "r":
+            self._toggle_read()
+            event.prevent_default()
+        elif event.key == "d":
+            self._delete()
+            event.prevent_default()
+
     @on(Tree.NodeSelected)
     def on_folder_selected(self, event):
         if event.node.data:
@@ -176,48 +211,6 @@ Seen: {seen}
 
     def action_focus_search(self):
         self.query_one("#search", Input).focus()
-
-    def action_cursor_down(self):
-        table = self.query_one("#messages", DataTable)
-        table.action_cursor_down()
-        self._show_detail(table.cursor_row)
-
-    def action_cursor_up(self):
-        table = self.query_one("#messages", DataTable)
-        table.action_cursor_up()
-        self._show_detail(table.cursor_row)
-
-    def action_open_message(self):
-        table = self.query_one("#messages", DataTable)
-        if table.cursor_row is not None:
-            self._show_detail(table.cursor_row)
-        elif self._results:
-            table.cursor_coordinate = (0, 0)
-            self._show_detail(0)
-
-    def action_view_raw(self):
-        self._show_raw()
-
-    def action_toggle_read(self):
-        table = self.query_one("#messages", DataTable)
-        if table.cursor_row is None or not self._results:
-            return
-        row = self._results[table.cursor_row]
-        conn = get_db()
-        new_seen = 0 if row["seen"] else 1
-        conn.execute("UPDATE messages SET seen = ? WHERE id = ?", (new_seen, row["id"]))
-        conn.commit()
-        self.query_messages("")
-
-    def action_delete(self):
-        table = self.query_one("#messages", DataTable)
-        if table.cursor_row is None or not self._results:
-            return
-        row = self._results[table.cursor_row]
-        conn = get_db()
-        conn.execute("DELETE FROM messages WHERE id = ?", (row["id"]))
-        conn.commit()
-        self.query_messages("")
 
     def action_sync(self):
         from .sync import get_envelopes, get_raw_message, parse_raw_message, HimalayaError
