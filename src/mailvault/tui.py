@@ -100,11 +100,9 @@ class MailVaultTUI(App):
         if not self._results:
             table.add_columns("No messages")
             return
-        table.add_columns("S", "From", "Subject", "Date")
+        table.add_columns("From", "Subject", "Date")
         for r in self._results:
-            seen = " " if r.get("seen") else "*"
             table.add_row(
-                seen,
                 r.get("from_name") or r.get("from_addr", ""),
                 (r.get("subject") or "")[:40],
                 (r.get("date") or "")[:16],
