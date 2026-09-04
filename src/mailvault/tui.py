@@ -4,8 +4,6 @@ from textual.app import App, ComposeResult
 from textual.containers import Horizontal, VerticalScroll
 from textual.widgets import DataTable, Footer, Header, Input, Static, Tree, RichLog
 from textual import on
-from textual.events import Key
-from textual.binding import Binding
 
 from .db import get_db, search, stats
 from .sync import list_accounts
@@ -25,15 +23,7 @@ class MailVaultTUI(App):
     BINDINGS = [
         ("/", "focus_search", "Search"),
         ("q", "quit", "Quit"),
-        ("g", "go_top", "Top"),
-        ("G", "go_bottom", "Bottom"),
         ("s", "sync", "Sync"),
-        ("j", "cursor_down", "Down"),
-        ("k", "cursor_up", "Up"),
-        ("enter", "open_message", "Open"),
-        ("v", "view_raw", "View Raw"),
-        ("r", "toggle_read", "Read/Unread"),
-        ("d", "delete", "Delete"),
     ]
 
     def __init__(self, account=None, initial_query=None):
@@ -59,7 +49,6 @@ class MailVaultTUI(App):
         self.sub_title = self.account or "All Accounts"
         self._populate_folders()
         self.query_messages(self.initial_query or "")
-        # Set initial focus to message table for immediate j/k/Enter use
         self.query_one("#messages", DataTable).focus()
 
     def _populate_folders(self):
@@ -111,7 +100,6 @@ class MailVaultTUI(App):
         )
 
     def _show_detail(self, row_index):
-        """Show formatted message detail."""
         if row_index is None or row_index < 0 or row_index >= len(self._results):
             return
         row = self._results[row_index]
@@ -126,8 +114,6 @@ class MailVaultTUI(App):
             date = row_data['date'] or ''
             account = row_data['account'] or ''
             seen = 'Yes' if row_data['seen'] else 'No'
-
-            # Prefer HTML body, convert to text if available
             body = row_data['body_text'] or ''
             body_html = row_data['body_html'] or ''
             if body_html:
@@ -138,7 +124,6 @@ class MailVaultTUI(App):
                     body = h.handle(body_html)
                 except ImportError:
                     body = body_html
-
             text = f"""{subject}
 {'=' * len(subject)}
 
@@ -153,11 +138,9 @@ Seen: {seen}
             detail = self.query_one("#detail", RichLog)
             detail.clear()
             detail.write(text)
-            scroll = self.query_one("#detail-scroll", VerticalScroll)
-            scroll.scroll_home()
+            self.query_one("#detail-scroll", VerticalScroll).scroll_home()
 
     def _show_raw(self):
-        """Show full raw RFC 5322 message."""
         table = self.query_one("#messages", DataTable)
         if table.cursor_row is None or not self._results:
             return
@@ -171,45 +154,19 @@ Seen: {seen}
             detail = self.query_one("#detail", RichLog)
             detail.clear()
             detail.write(raw[:5000])
-            scroll = self.query_one("#detail-scroll", VerticalScroll)
-            scroll.scroll_home()
-
-    def _toggle_read(self):
-        table = self.query_one("#messages", DataTable)
-        if table.cursor_row is None or not self._results:
-            return
-        row = self._results[table.cursor_row]
-        conn = get_db()
-        new_seen = 0 if row["seen"] else 1
-        conn.execute("UPDATE messages SET seen = ? WHERE id = ?", (new_seen, row["id"]))
-        conn.commit()
-        self.query_messages("")
-
-    def _delete(self):
-        table = self.query_one("#messages", DataTable)
-        if table.cursor_row is None or not self._results:
-            return
-        row = self._results[table.cursor_row]
-        conn = get_db()
-        conn.execute("DELETE FROM messages WHERE id = ?", (row["id"],))
-        conn.commit()
-        self.query_messages("")
+            self.query_one("#detail-scroll", VerticalScroll).scroll_home()
 
     @on(Input.Submitted, "#search")
-    def on_search_submitted(self, event: Input.Submitted) -> None:
-        """Handle search input submission (Enter in search box)."""
+    def on_search_submitted(self, event):
         self.query_messages(event.value)
-        # Move focus to message table so j/k and Enter work on results
         self.query_one("#messages", DataTable).focus()
 
     @on(DataTable.RowHighlighted)
     def on_row_highlighted(self, event):
-        """Show message detail when row is highlighted (cursor moves)."""
         self._show_detail(event.cursor_row)
 
     @on(DataTable.RowSelected)
     def on_row_selected(self, event):
-        """Show message detail when row is selected (Enter key)."""
         self._show_detail(event.cursor_row)
 
     @on(Tree.NodeSelected)
@@ -220,43 +177,7 @@ Seen: {seen}
             self.query_messages("")
 
     def action_focus_search(self):
-        """Focus the search input."""
         self.query_one("#search", Input).focus()
-
-    def action_go_top(self):
-        table = self.query_one("#messages", DataTable)
-        table.cursor_coordinate = (0, 0)
-        self._show_detail(0)
-
-    def action_go_bottom(self):
-        table = self.query_one("#messages", DataTable)
-        if table.row_count > 0:
-            table.cursor_coordinate = (table.row_count - 1, 0)
-            self._show_detail(table.row_count - 1)
-
-    def action_cursor_down(self):
-        table = self.query_one("#messages", DataTable)
-        table.action_cursor_down()
-        self._show_detail(table.cursor_row)
-
-    def action_cursor_up(self):
-        table = self.query_one("#messages", DataTable)
-        table.action_cursor_up()
-        self._show_detail(table.cursor_row)
-
-    def action_open_message(self):
-        """Open selected message (triggered by Enter)."""
-        table = self.query_one("#messages", DataTable)
-        self._show_detail(table.cursor_row)
-
-    def action_view_raw(self):
-        self._show_raw()
-
-    def action_toggle_read(self):
-        self._toggle_read()
-
-    def action_delete(self):
-        self._delete()
 
     def action_sync(self):
         from .sync import get_envelopes, get_raw_message, parse_raw_message, HimalayaError
