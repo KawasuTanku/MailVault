@@ -59,6 +59,8 @@ class MailVaultTUI(App):
         self.sub_title = self.account or "All Accounts"
         self._populate_folders()
         self.query_messages(self.initial_query or "")
+        # Set initial focus to message table for immediate j/k/Enter use
+        self.query_one("#messages", DataTable).focus()
 
     def _populate_folders(self):
         tree = self.query_one("#folders", Tree)
@@ -197,6 +199,8 @@ Seen: {seen}
     def on_search_submitted(self, event: Input.Submitted) -> None:
         """Handle search input submission (Enter in search box)."""
         self.query_messages(event.value)
+        # Move focus to message table so j/k and Enter work on results
+        self.query_one("#messages", DataTable).focus()
 
     @on(DataTable.RowHighlighted)
     def on_row_highlighted(self, event):
