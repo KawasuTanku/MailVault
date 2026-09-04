@@ -5,6 +5,7 @@ from textual.containers import Horizontal, VerticalScroll
 from textual.widgets import DataTable, Footer, Header, Input, Static, Tree, RichLog
 from textual import on
 from textual.events import Key
+from textual.binding import Binding
 
 from .db import get_db, search, stats
 from .sync import list_accounts
@@ -22,11 +23,17 @@ class MailVaultTUI(App):
     """
 
     BINDINGS = [
-        ("/", "search", "Search"),
+        ("/", "focus_search", "Search"),
         ("q", "quit", "Quit"),
-        ("s", "sync", "Sync"),
         ("g", "go_top", "Top"),
         ("G", "go_bottom", "Bottom"),
+        ("s", "sync", "Sync"),
+        ("j", "cursor_down", "Down"),
+        ("k", "cursor_up", "Up"),
+        ("enter", "open_message", "Open"),
+        ("v", "view_raw", "View Raw"),
+        ("r", "toggle_read", "Read/Unread"),
+        ("d", "delete", "Delete"),
     ]
 
     def __init__(self, account=None, initial_query=None):
@@ -37,7 +44,7 @@ class MailVaultTUI(App):
 
     def compose(self) -> ComposeResult:
         yield Header()
-        yield Input(placeholder="Search... (press / to focus)", id="search")
+        yield Input(placeholder="Search... (press / to focus, Enter to search)", id="search")
         yield Horizontal(
             Tree("Accounts", id="folders"),
             DataTable(id="messages"),
@@ -125,10 +132,10 @@ class MailVaultTUI(App):
                 try:
                     import html2text
                     h = html2text.HTML2Text()
-                    h.body_width = 0  # Don't wrap lines
+                    h.body_width = 0
                     body = h.handle(body_html)
                 except ImportError:
-                    body = body_html  # Fallback to raw HTML
+                    body = body_html
 
             text = f"""{subject}
 {'=' * len(subject)}
@@ -148,7 +155,7 @@ Seen: {seen}
             scroll.scroll_home()
 
     def _show_raw(self):
-        """Show full raw RFC 5322 message (headers + body)."""
+        """Show full raw RFC 5322 message."""
         table = self.query_one("#messages", DataTable)
         if table.cursor_row is None or not self._results:
             return
@@ -186,36 +193,15 @@ Seen: {seen}
         conn.commit()
         self.query_messages("")
 
-    @on(Key)
-    def on_key(self, event: Key) -> None:
-        """Handle ALL key events at the app level."""
-        # Don't intercept keys when search input is focused
-        search = self.query_one("#search", Input)
-        if search.has_focus:
-            return
+    @on(Input.Submitted, "#search")
+    def on_search_submitted(self, event: Input.Submitted) -> None:
+        """Handle search input submission (Enter in search box)."""
+        self.query_messages(event.value)
 
-        table = self.query_one("#messages", DataTable)
-        
-        if event.key == "j":
-            table.action_cursor_down()
-            self._show_detail(table.cursor_row)
-            event.prevent_default()
-        elif event.key == "k":
-            table.action_cursor_up()
-            self._show_detail(table.cursor_row)
-            event.prevent_default()
-        elif event.key == "enter":
-            self._show_detail(table.cursor_row)
-            event.prevent_default()
-        elif event.key == "v":
-            self._show_raw()
-            event.prevent_default()
-        elif event.key == "r":
-            self._toggle_read()
-            event.prevent_default()
-        elif event.key == "d":
-            self._delete()
-            event.prevent_default()
+    @on(DataTable.RowHighlighted)
+    def on_row_highlighted(self, event):
+        """Show message detail when row is highlighted (cursor moves)."""
+        self._show_detail(event.cursor_row)
 
     @on(Tree.NodeSelected)
     def on_folder_selected(self, event):
@@ -224,7 +210,8 @@ Seen: {seen}
             self.sub_title = self.account or "All Accounts"
             self.query_messages("")
 
-    def action_search(self):
+    def action_focus_search(self):
+        """Focus the search input."""
         self.query_one("#search", Input).focus()
 
     def action_go_top(self):
@@ -237,6 +224,30 @@ Seen: {seen}
         if table.row_count > 0:
             table.cursor_coordinate = (table.row_count - 1, 0)
             self._show_detail(table.row_count - 1)
+
+    def action_cursor_down(self):
+        table = self.query_one("#messages", DataTable)
+        table.action_cursor_down()
+        self._show_detail(table.cursor_row)
+
+    def action_cursor_up(self):
+        table = self.query_one("#messages", DataTable)
+        table.action_cursor_up()
+        self._show_detail(table.cursor_row)
+
+    def action_open_message(self):
+        """Open selected message (triggered by Enter)."""
+        table = self.query_one("#messages", DataTable)
+        self._show_detail(table.cursor_row)
+
+    def action_view_raw(self):
+        self._show_raw()
+
+    def action_toggle_read(self):
+        self._toggle_read()
+
+    def action_delete(self):
+        self._delete()
 
     def action_sync(self):
         from .sync import get_envelopes, get_raw_message, parse_raw_message, HimalayaError
@@ -268,8 +279,7 @@ Seen: {seen}
                         "date": parsed["date"], "from_addr": parsed["from_addr"], "from_name": parsed["from_name"],
                         "to_addr": parsed["to_addr"], "to_name": parsed["to_name"], "subject": parsed["subject"],
                         "body_text": parsed["body_text"], "body_html": parsed.get("body_html", ""),
-                        "headers_json": parsed["headers"],
-                        "raw_rfc5322": raw, "seen": seen,
+                        "headers_json": parsed["headers"], "raw_rfc5322": raw, "seen": seen,
                     })
                     new_count += 1
                 except HimalayaError:
