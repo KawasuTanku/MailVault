@@ -207,6 +207,11 @@ Seen: {seen}
         """Show message detail when row is highlighted (cursor moves)."""
         self._show_detail(event.cursor_row)
 
+    @on(DataTable.RowSelected)
+    def on_row_selected(self, event):
+        """Show message detail when row is selected (Enter key)."""
+        self._show_detail(event.cursor_row)
+
     @on(Tree.NodeSelected)
     def on_folder_selected(self, event):
         if event.node.data:
