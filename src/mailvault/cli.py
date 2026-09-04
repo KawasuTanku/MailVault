@@ -13,12 +13,16 @@ from .sync import (
 )
 from .io import export_all, import_from_jsonl
 from .tui import run_tui
+from .spam_cli import spam
 
 
 @click.group()
 def main():
     """MailVault — local email archive with full-text search."""
     pass
+
+
+main.add_command(spam)
 
 
 @main.command()

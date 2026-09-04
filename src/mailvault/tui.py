@@ -8,6 +8,7 @@ from textual.events import Key
 
 from .db import get_db, search, stats
 from .sync import list_accounts
+from .spam import report_spam_using_himalaya, PROVIDERS
 
 
 class MailVaultTUI(App):
@@ -37,6 +38,7 @@ class MailVaultTUI(App):
         ("v", "view_raw", "View Raw"),
         ("r", "toggle_read", "Read/Unread"),
         ("d", "delete", "Delete"),
+        ("S", "report_spam", "Report Spam"),
     ]
 
     def __init__(self, account=None, initial_query=None):
@@ -258,6 +260,52 @@ Seen: {seen}
             conn.commit()
             update_sync_state(conn, acc_name, 1, new_count, 0)
         self.query_messages("")
+
+
+    def action_report_spam(self):
+        """Report selected message as spam."""
+        table = self.query_one("#messages", DataTable)
+        if table.cursor_row is None or not self._results:
+            return
+        row = self._results[table.cursor_row]
+        conn = get_db()
+        raw_row = conn.execute(
+            "SELECT raw_rfc5322 FROM messages WHERE id = ?", (row["id"],)
+        ).fetchone()
+        if not raw_row or not raw_row["raw_rfc5322"]:
+            return
+        
+        raw = raw_row["raw_rfc5322"]
+        if isinstance(raw, str):
+            raw = raw.encode("utf-8")
+        
+        recipient = PROVIDERS["spamhaus"]["address"]
+        
+        smtp_config = None
+        try:
+            from .spam import load_smtp_config
+            smtp_config = load_smtp_config()
+        except Exception:
+            pass
+        
+        from_addr = smtp_config["from_addr"] if smtp_config else "reporter@localhost"
+        
+        success = report_spam_using_himalaya(
+            raw_rfc5322=raw,
+            recipient=recipient,
+            from_addr=from_addr,
+            subject=row["subject"] or "Spam report",
+            message_id=row["message_id"] or "",
+        )
+        
+        if success:
+            self.query_one("#status", Static).update(
+                f"Spam report sent to {recipient}"
+            )
+        else:
+            self.query_one("#status", Static).update(
+                f"Failed to send spam report"
+            )
 
 
 def run_tui(account=None, query=None):
