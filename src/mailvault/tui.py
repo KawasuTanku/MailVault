@@ -9,6 +9,7 @@ from textual.events import Key
 from .db import get_db, search, stats
 from .sync import list_accounts
 from .spam import report_spam_using_himalaya, PROVIDERS
+from .header_analysis import analyze_headers, format_source_report
 
 
 class MailVaultTUI(App):
@@ -39,6 +40,7 @@ class MailVaultTUI(App):
         ("r", "toggle_read", "Read/Unread"),
         ("d", "delete", "Delete"),
         ("S", "report_spam", "Report Spam"),
+        ("a", "analyze_headers", "Analyze"),
     ]
 
     def __init__(self, account=None, initial_query=None):
@@ -305,6 +307,31 @@ Seen: {seen}
             self.query_one("#status", Static).update(
                 f"Failed to send spam report"
             )
+
+    def action_analyze_headers(self):
+        """Analyze headers of selected message to detect spam source."""
+        table = self.query_one("#messages", DataTable)
+        if table.cursor_row is None or not self._results:
+            return
+        row = self._results[table.cursor_row]
+        conn = get_db()
+        raw_row = conn.execute(
+            "SELECT raw_rfc5322 FROM messages WHERE id = ?", (row["id"],)
+        ).fetchone()
+        if not raw_row or not raw_row["raw_rfc5322"]:
+            return
+        
+        raw = raw_row["raw_rfc5322"]
+        if isinstance(raw, str):
+            raw = raw.encode("utf-8")
+        
+        source = analyze_headers(raw)
+        report = format_source_report(source)
+        
+        detail = self.query_one("#detail", RichLog)
+        detail.clear()
+        detail.write(report)
+        self.query_one("#detail-scroll", VerticalScroll).scroll_home()
 
 
 def run_tui(account=None, query=None):

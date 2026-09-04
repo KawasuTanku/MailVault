@@ -2,6 +2,7 @@
 
 import click
 from .spam import report_spam_using_himalaya, PROVIDERS, load_smtp_config
+from .header_analysis import analyze_headers, format_source_report
 from .db import get_db
 
 
@@ -21,8 +22,9 @@ def spam():
     help="Spam reporting provider",
 )
 @click.option("--custom", help="Custom reporting address (overrides --provider)")
+@click.option("--analyze", is_flag=True, help="Analyze headers before reporting")
 @click.argument("message_id", type=int)
-def report(account, from_addr, provider, custom, message_id):
+def report(account, from_addr, provider, custom, analyze, message_id):
     """Report a message as spam."""
     conn = get_db()
     row = conn.execute(
@@ -40,6 +42,13 @@ def report(account, from_addr, provider, custom, message_id):
     
     if isinstance(raw, str):
         raw = raw.encode("utf-8")
+    
+    # Analyze headers if requested
+    if analyze:
+        click.echo("Analyzing headers...")
+        source = analyze_headers(raw)
+        click.echo(format_source_report(source))
+        click.echo()
     
     if custom:
         recipient = custom
@@ -69,6 +78,31 @@ def report(account, from_addr, provider, custom, message_id):
         click.echo("Report sent successfully.")
     else:
         click.echo("Failed to send report.", err=True)
+
+
+@spam.command()
+@click.argument("message_id", type=int)
+def analyze(message_id):
+    """Analyze email headers to detect spam source."""
+    conn = get_db()
+    row = conn.execute(
+        "SELECT * FROM messages WHERE id = ?", (message_id,)
+    ).fetchone()
+    
+    if not row:
+        click.echo(f"Message {message_id} not found.", err=True)
+        return
+    
+    raw = row["raw_rfc5322"]
+    if not raw:
+        click.echo(f"Message {message_id} has no raw content.", err=True)
+        return
+    
+    if isinstance(raw, str):
+        raw = raw.encode("utf-8")
+    
+    source = analyze_headers(raw)
+    click.echo(format_source_report(source))
 
 
 @spam.command()
