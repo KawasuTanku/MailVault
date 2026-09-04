@@ -4,6 +4,7 @@ from textual.app import App, ComposeResult
 from textual.containers import Horizontal, VerticalScroll
 from textual.widgets import DataTable, Footer, Header, Input, Static, Tree, RichLog
 from textual import on
+from textual.events import Key
 
 from .db import get_db, search, stats
 from .sync import list_accounts
