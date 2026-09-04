@@ -155,7 +155,9 @@ Seen: {seen}
             detail = self.query_one("#detail", RichLog)
             detail.clear()
             detail.write(text)
-            self.query_one("#detail-scroll", VerticalScroll).scroll_home()
+            # Scroll to top after showing new message
+            scroll = self.query_one("#detail-scroll", VerticalScroll)
+            scroll.scroll_to(y=0)
 
     def _show_raw(self):
         table = self.query_one("#messages", DataTable)
