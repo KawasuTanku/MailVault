@@ -14,9 +14,14 @@ class MailVaultTUI(App):
     """Classic email client TUI."""
 
     CSS = """
-    #main { height: 1fr; layout: horizontal; }
+    Screen {
+        layout: grid;
+        grid-size: 1;
+        grid-rows: auto 2fr 1fr auto;
+    }
+    #top { height: 1fr; layout: horizontal; }
     #folders { width: 25%; border: solid $primary; padding: 1; }
-    #messages { width: 35%; border: solid $primary; }
+    #messages { width: 1fr; border: solid $primary; }
     #detail { width: 1fr; border: solid $primary; padding: 1; overflow-y: auto; }
     #status { height: 3; border: solid $primary; padding: 0 1; }
     """
@@ -45,9 +50,9 @@ class MailVaultTUI(App):
         yield Horizontal(
             Tree("Accounts", id="folders"),
             DataTable(id="messages"),
-            VerticalScroll(RichLog(id="detail", markup=False), id="detail-scroll"),
-            id="main",
+            id="top",
         )
+        yield VerticalScroll(RichLog(id="detail", markup=False), id="detail-scroll")
         yield Static("", id="status")
         yield Footer()
 
