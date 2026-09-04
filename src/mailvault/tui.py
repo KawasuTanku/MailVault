@@ -21,7 +21,7 @@ class MailVaultTUI(App):
     }
     #main { height: 1fr; layout: horizontal; }
     #folders { width: 18; height: 100%; border: solid $primary; padding: 1; }
-    #right { width: 1fr; layout: grid; grid-rows: 2fr 1fr; }
+    #right { width: 1fr; layout: grid; grid-rows: 1fr 2fr; }
     #messages { border: solid $primary; }
     #detail { border: solid $primary; padding: 1; overflow-y: auto; }
     #status { height: 3; border: solid $primary; padding: 0 1; }
