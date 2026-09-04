@@ -1,7 +1,7 @@
 """Textual TUI for MailVault — minimal working version."""
 
 from textual.app import App, ComposeResult
-from textual.containers import Horizontal, VerticalScroll
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import DataTable, Footer, Header, Input, Static, Tree, RichLog
 from textual import on
 from textual.events import Key
@@ -17,12 +17,13 @@ class MailVaultTUI(App):
     Screen {
         layout: grid;
         grid-size: 1;
-        grid-rows: auto 2fr 1fr auto;
+        grid-rows: auto 1fr auto;
     }
-    #top { height: 1fr; layout: horizontal; }
-    #folders { width: 25%; border: solid $primary; padding: 1; }
-    #messages { width: 1fr; border: solid $primary; }
-    #detail { width: 1fr; border: solid $primary; padding: 1; overflow-y: auto; }
+    #main { height: 1fr; layout: horizontal; }
+    #folders { width: 18; height: 100%; border: solid $primary; padding: 1; }
+    #right { width: 1fr; layout: grid; grid-rows: 2fr 1fr; }
+    #messages { border: solid $primary; }
+    #detail { border: solid $primary; padding: 1; overflow-y: auto; }
     #status { height: 3; border: solid $primary; padding: 0 1; }
     """
 
@@ -49,10 +50,13 @@ class MailVaultTUI(App):
         yield Input(placeholder="Search... (press / then type, Enter to search)", id="search")
         yield Horizontal(
             Tree("Accounts", id="folders"),
-            DataTable(id="messages"),
-            id="top",
+            Vertical(
+                DataTable(id="messages"),
+                VerticalScroll(RichLog(id="detail", markup=False), id="detail-scroll"),
+                id="right",
+            ),
+            id="main",
         )
-        yield VerticalScroll(RichLog(id="detail", markup=False), id="detail-scroll")
         yield Static("", id="status")
         yield Footer()
 
