@@ -1,10 +1,9 @@
-"""Textual TUI for MailVault — minimal clean implementation."""
+"""Textual TUI for MailVault — clean implementation."""
 
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, VerticalScroll
 from textual.widgets import DataTable, Footer, Header, Input, Static, Tree, RichLog
 from textual import on
-from textual.events import Key
 
 from .db import get_db, search, stats
 from .sync import list_accounts
@@ -168,14 +167,6 @@ Seen: {seen}
         self.query_messages(event.value)
         self.query_one("#messages", DataTable).focus()
 
-    @on(DataTable.RowHighlighted)
-    def on_row_highlighted(self, event):
-        self._show_detail(event.cursor_row)
-
-    @on(DataTable.RowSelected)
-    def on_row_selected(self, event):
-        self._show_detail(event.cursor_row)
-
     @on(Tree.NodeSelected)
     def on_folder_selected(self, event):
         if event.node.data:
@@ -201,7 +192,6 @@ Seen: {seen}
         if table.cursor_row is not None:
             self._show_detail(table.cursor_row)
         elif self._results:
-            # No cursor yet, select first row
             table.cursor_coordinate = (0, 0)
             self._show_detail(0)
 
