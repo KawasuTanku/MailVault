@@ -1,9 +1,10 @@
-"""Textual TUI for MailVault."""
+"""Textual TUI for MailVault — clean implementation."""
 
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, VerticalScroll
 from textual.widgets import DataTable, Footer, Header, Input, Static, Tree, RichLog
 from textual import on
+from textual.events import Key
 
 from .db import get_db, search, stats
 from .sync import list_accounts
@@ -34,7 +35,7 @@ class MailVaultTUI(App):
 
     def compose(self) -> ComposeResult:
         yield Header()
-        yield Input(placeholder="Search... (press / to focus, Enter to search)", id="search")
+        yield Input(placeholder="Search... (press / then type, Enter to search)", id="search")
         yield Horizontal(
             Tree("Accounts", id="folders"),
             DataTable(id="messages"),
