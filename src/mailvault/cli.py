@@ -14,6 +14,7 @@ from .sync import (
 from .io import export_all, import_from_jsonl
 from .tui import run_tui
 from .spam_cli import spam
+from .show_cli import show
 
 
 @click.group()
@@ -23,6 +24,7 @@ def main():
 
 
 main.add_command(spam)
+main.add_command(show)
 
 
 @main.command()
