@@ -1,5 +1,7 @@
 """Textual TUI for MailVault — minimal working version."""
 
+import os
+
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import DataTable, Footer, Header, Input, Static, Tree, RichLog
@@ -20,13 +22,67 @@ class MailVaultTUI(App):
         layout: grid;
         grid-size: 1;
         grid-rows: auto 1fr auto;
+        background: $background;
     }
     #main { height: 1fr; layout: horizontal; }
-    #folders { width: 25; height: 100%; border: solid $primary; padding: 1; }
+    #folders {
+        width: 25;
+        height: 100%;
+        border: solid $primary;
+        padding: 1;
+        background: $surface;
+    }
     #right { width: 1fr; layout: grid; grid-rows: 1fr 2fr; }
-    #messages { border: solid $primary; }
-    #detail { border: solid $primary; padding: 1; overflow-y: auto; }
-    #status { height: 3; border: solid $primary; padding: 0 1; }
+    #messages {
+        border: solid $primary;
+        background: $surface;
+    }
+    #detail {
+        border: solid $primary;
+        padding: 1;
+        overflow-y: auto;
+        background: $surface;
+    }
+    #status {
+        height: 3;
+        border: solid $primary;
+        padding: 0 1;
+        background: $surface;
+        color: $success;
+    }
+    DataTable > .datatable--cursor {
+        background: $accent;
+        color: $background;
+    }
+    Tree > .tree--cursor {
+        background: $accent;
+        color: $background;
+    }
+    Header {
+        color: $accent;
+        background: $surface;
+    }
+    Footer {
+        color: $foreground;
+        background: $surface;
+    }
+    Static {
+        color: $foreground;
+    }
+    Input {
+        color: $foreground;
+        background: $surface;
+    }
+    RichLog {
+        background: $surface;
+        color: $foreground;
+    }
+    VerticalScroll {
+        background: $surface;
+    }
+    .warning { color: $warning; }
+    .success { color: $success; }
+    .error { color: $error; }
     """
 
     BINDINGS = [
@@ -48,6 +104,30 @@ class MailVaultTUI(App):
         self.account = account
         self.initial_query = initial_query
         self._results = []
+
+        # Apply TankuOS theme if TANKUOS_THEME_* env vars are present
+        def rgb_env(name, default):
+            raw = os.environ.get(name, "")
+            if "," in raw:
+                parts = raw.split(",")[:3]
+                try:
+                    r, g, b = (int(p) for p in parts)
+                    return f"#{r:02x}{g:02x}{b:02x}"
+                except ValueError:
+                    pass
+            return default
+
+        self.stylesheet.set_variables({
+            "primary": rgb_env("TANKUOS_THEME_ACCENT", "#6cb6ff"),
+            "accent": rgb_env("TANKUOS_THEME_ACCENT", "#6cb6ff"),
+            "background": rgb_env("TANKUOS_THEME_BG", "#11141d"),
+            "foreground": rgb_env("TANKUOS_THEME_FG", "#c8d0dc"),
+            "surface": rgb_env("TANKUOS_THEME_PANEL", "#1d2433"),
+            "boost": rgb_env("TANKUOS_THEME_SECONDARY", "#2d3a55"),
+            "error": rgb_env("TANKUOS_THEME_ERROR", "#ff6b6b"),
+            "warning": rgb_env("TANKUOS_THEME_WARNING", "#f0c674"),
+            "success": rgb_env("TANKUOS_THEME_SUCCESS", "#98c379"),
+        })
 
     def compose(self) -> ComposeResult:
         yield Header()
