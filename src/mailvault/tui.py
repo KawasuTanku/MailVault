@@ -14,8 +14,21 @@ from .spam import report_spam_using_himalaya, PROVIDERS
 from .header_analysis import analyze_headers, format_source_report
 
 
+def parse_rgb_env(name, default):
+    """Parse a TankuOS TANKUOS_THEME_* env var ('r,g,b') into hex (#rrggbb)."""
+    raw = os.environ.get(name, "")
+    if "," in raw:
+        parts = raw.split(",")[:3]
+        try:
+            r, g, b = (int(p) for p in parts)
+            return f"#{r:02x}{g:02x}{b:02x}"
+        except ValueError:
+            pass
+    return default
+
+
 class MailVaultTUI(App):
-    """Classic email client TUI."""
+    """Classic email client TUI with TankuOS theme support."""
 
     CSS = """
     Screen {
@@ -105,31 +118,99 @@ class MailVaultTUI(App):
         self.initial_query = initial_query
         self._results = []
 
-        # Apply TankuOS theme if TANKUOS_THEME_* env vars are present
-        def rgb_env(name, default):
-            raw = os.environ.get(name, "")
-            if "," in raw:
-                parts = raw.split(",")[:3]
-                try:
-                    r, g, b = (int(p) for p in parts)
-                    return f"#{r:02x}{g:02x}{b:02x}"
-                except ValueError:
-                    pass
-            return default
-
+        # Apply TankuOS theme via TANKUOS_THEME_* env vars (injected by PTY host)
         self.stylesheet.set_variables({
-            "primary": rgb_env("TANKUOS_THEME_ACCENT", "#6cb6ff"),
-            "accent": rgb_env("TANKUOS_THEME_ACCENT", "#6cb6ff"),
-            "background": rgb_env("TANKUOS_THEME_BG", "#11141d"),
-            "foreground": rgb_env("TANKUOS_THEME_FG", "#c8d0dc"),
-            "surface": rgb_env("TANKUOS_THEME_PANEL", "#1d2433"),
-            "panel": rgb_env("TANKUOS_THEME_PANEL", "#1d2433"),
-            "boost": rgb_env("TANKUOS_THEME_SECONDARY", "#2d3a55"),
-            "error": rgb_env("TANKUOS_THEME_ERROR", "#ff6b6b"),
-            "warning": rgb_env("TANKUOS_THEME_WARNING", "#f0c674"),
-            "success": rgb_env("TANKUOS_THEME_SUCCESS", "#98c379"),
-            "screen-selection-background": rgb_env("TANKUOS_THEME_ACCENT", "#6cb6ff"),
-            "screen-selection-foreground": rgb_env("TANKUOS_THEME_BG", "#11141d"),
+            "primary": parse_rgb_env("TANKUOS_THEME_ACCENT", "#6cb6ff"),
+            "accent": parse_rgb_env("TANKUOS_THEME_ACCENT", "#6cb6ff"),
+            "background": parse_rgb_env("TANKUOS_THEME_BG", "#11141d"),
+            "foreground": parse_rgb_env("TANKUOS_THEME_FG", "#c8d0dc"),
+            "surface": parse_rgb_env("TANKUOS_THEME_PANEL", "#1d2433"),
+            "panel": parse_rgb_env("TANKUOS_THEME_PANEL", "#1d2433"),
+            "boost": parse_rgb_env("TANKUOS_THEME_SECONDARY", "#2d3a55"),
+            "error": parse_rgb_env("TANKUOS_THEME_ERROR", "#ff6b6b"),
+            "warning": parse_rgb_env("TANKUOS_THEME_WARNING", "#f0c674"),
+            "success": parse_rgb_env("TANKUOS_THEME_SUCCESS", "#98c379"),
+            # Textual default CSS variables (ansi, scrollbar, border, etc.)
+            "ansi-background": parse_rgb_env("TANKUOS_THEME_BG", "#11141d"),
+            "ansi-foreground": parse_rgb_env("TANKUOS_THEME_FG", "#c8d0dc"),
+            "screen-selection-background": parse_rgb_env("TANKUOS_THEME_ACCENT", "#6cb6ff"),
+            "screen-selection-foreground": parse_rgb_env("TANKUOS_THEME_BG", "#11141d"),
+            "scrollbar-background": parse_rgb_env("TANKUOS_THEME_PANEL", "#1d2433"),
+            "scrollbar": parse_rgb_env("TANKUOS_THEME_ACCENT", "#6cb6ff"),
+            "scrollbar-active": parse_rgb_env("TANKUOS_THEME_ACCENT", "#6cb6ff"),
+            "scrollbar-hover": parse_rgb_env("TANKUOS_THEME_ACCENT", "#6cb6ff"),
+            "scrollbar-background-hover": parse_rgb_env("TANKUOS_THEME_PANEL", "#1d2433"),
+            "scrollbar-background-active": parse_rgb_env("TANKUOS_THEME_PANEL", "#1d2433"),
+            "scrollbar-corner-color": parse_rgb_env("TANKUOS_THEME_PANEL", "#1d2433"),
+            "link-background": parse_rgb_env("TANKUOS_THEME_ACCENT", "#6cb6ff"),
+            "link-color": parse_rgb_env("TANKUOS_THEME_ACCENT", "#6cb6ff"),
+            "link-style": "bold",
+            "link-background-hover": parse_rgb_env("TANKUOS_THEME_ACCENT", "#6cb6ff"),
+            "link-color-hover": parse_rgb_env("TANKUOS_THEME_BG", "#11141d"),
+            "link-style-hover": "bold",
+            "block-cursor-foreground": parse_rgb_env("TANKUOS_THEME_FG", "#c8d0dc"),
+            "block-cursor-background": parse_rgb_env("TANKUOS_THEME_BG", "#11141d"),
+            "block-cursor-text-style": "reverse",
+            "block-cursor-blurred-foreground": parse_rgb_env("TANKUOS_THEME_FG", "#c8d0dc"),
+            "block-cursor-blurred-background": parse_rgb_env("TANKUOS_THEME_PANEL", "#1d2433"),
+            "block-cursor-blurred-text-style": "reverse",
+            "border": parse_rgb_env("TANKUOS_THEME_PANEL", "#1d2433"),
+            "border-blurred": parse_rgb_env("TANKUOS_THEME_PANEL", "#1d2433"),
+            "panel-darken-1": parse_rgb_env("TANKUOS_THEME_PANEL", "#1d2433"),
+            "panel-darken-2": parse_rgb_env("TANKUOS_THEME_BG", "#11141d"),
+            "panel-lighten-1": parse_rgb_env("TANKUOS_THEME_PANEL", "#1d2433"),
+            "panel-lighten-2": parse_rgb_env("TANKUOS_THEME_PANEL", "#1d2433"),
+            "panel-lighten-3": parse_rgb_env("TANKUOS_THEME_PANEL", "#1d2433"),
+            "surface-lighten-1": parse_rgb_env("TANKUOS_THEME_PANEL", "#1d2433"),
+            "surface-lighten-2": parse_rgb_env("TANKUOS_THEME_PANEL", "#1d2433"),
+            "surface-lighten-3": parse_rgb_env("TANKUOS_THEME_PANEL", "#1d2433"),
+            "surface-darken-1": parse_rgb_env("TANKUOS_THEME_BG", "#11141d"),
+            "primary-muted": parse_rgb_env("TANKUOS_THEME_PANEL", "#1d2433"),
+            "primary-lighten-3": parse_rgb_env("TANKUOS_THEME_ACCENT", "#6cb6ff"),
+            "primary-darken-2": parse_rgb_env("TANKUOS_THEME_PANEL", "#1d2433"),
+            "primary-darken-3": parse_rgb_env("TANKUOS_THEME_BG", "#11141d"),
+            "accent-muted": parse_rgb_env("TANKUOS_THEME_PANEL", "#1d2433"),
+            "accent-darken-1": parse_rgb_env("TANKUOS_THEME_PANEL", "#1d2433"),
+            "success-muted": parse_rgb_env("TANKUOS_THEME_PANEL", "#1d2433"),
+            "success-lighten-1": parse_rgb_env("TANKUOS_THEME_SUCCESS", "#98c379"),
+            "success-lighten-2": parse_rgb_env("TANKUOS_THEME_SUCCESS", "#98c379"),
+            "success-darken-2": parse_rgb_env("TANKUOS_THEME_BG", "#11141d"),
+            "success-darken-3": parse_rgb_env("TANKUOS_THEME_BG", "#11141d"),
+            "warning-muted": parse_rgb_env("TANKUOS_THEME_PANEL", "#1d2433"),
+            "warning-darken-1": parse_rgb_env("TANKUOS_THEME_BG", "#11141d"),
+            "error-muted": parse_rgb_env("TANKUOS_THEME_PANEL", "#1d2433"),
+            "error-lighten-2": parse_rgb_env("TANKUOS_THEME_ERROR", "#ff6b6b"),
+            "error-darken-1": parse_rgb_env("TANKUOS_THEME_BG", "#11141d"),
+            "error-darken-2": parse_rgb_env("TANKUOS_THEME_BG", "#11141d"),
+            "text": parse_rgb_env("TANKUOS_THEME_FG", "#c8d0dc"),
+            "text-muted": parse_rgb_env("TANKUOS_THEME_PANEL", "#1d2433"),
+            "text-primary": parse_rgb_env("TANKUOS_THEME_ACCENT", "#6cb6ff"),
+            "text-secondary": parse_rgb_env("TANKUOS_THEME_PANEL", "#1d2433"),
+            "text-success": parse_rgb_env("TANKUOS_THEME_SUCCESS", "#98c379"),
+            "text-warning": parse_rgb_env("TANKUOS_THEME_WARNING", "#f0c674"),
+            "text-error": parse_rgb_env("TANKUOS_THEME_ERROR", "#ff6b6b"),
+            "text-accent": parse_rgb_env("TANKUOS_THEME_ACCENT", "#6cb6ff"),
+            "text-disabled": parse_rgb_env("TANKUOS_THEME_PANEL", "#1d2433"),
+            "foreground-muted": parse_rgb_env("TANKUOS_THEME_PANEL", "#1d2433"),
+            "foreground-darken-1": parse_rgb_env("TANKUOS_THEME_PANEL", "#1d2433"),
+            "secondary": parse_rgb_env("TANKUOS_THEME_PANEL", "#1d2433"),
+            "secondary-muted": parse_rgb_env("TANKUOS_THEME_BG", "#11141d"),
+            "button-focus-text-style": "reverse bold",
+            "button-foreground": parse_rgb_env("TANKUOS_THEME_FG", "#c8d0dc"),
+            "button-color-foreground": parse_rgb_env("TANKUOS_THEME_FG", "#c8d0dc"),
+            "input-cursor-background": parse_rgb_env("TANKUOS_THEME_ACCENT", "#6cb6ff"),
+            "input-cursor-foreground": parse_rgb_env("TANKUOS_THEME_BG", "#11141d"),
+            "input-cursor-text-style": "reverse",
+            "input-selection-background": parse_rgb_env("TANKUOS_THEME_ACCENT", "#6cb6ff"),
+            "input-selection-foreground": parse_rgb_env("TANKUOS_THEME_BG", "#11141d"),
+            "footer-item-background": parse_rgb_env("TANKUOS_THEME_PANEL", "#1d2433"),
+            "footer-key-foreground": parse_rgb_env("TANKUOS_THEME_FG", "#c8d0dc"),
+            "footer-key-background": parse_rgb_env("TANKUOS_THEME_BG", "#11141d"),
+            "footer-description-foreground": parse_rgb_env("TANKUOS_THEME_FG", "#c8d0dc"),
+            "footer-description-background": parse_rgb_env("TANKUOS_THEME_BG", "#11141d"),
+            "footer-foreground": parse_rgb_env("TANKUOS_THEME_FG", "#c8d0dc"),
+            "footer-background": parse_rgb_env("TANKUOS_THEME_PANEL", "#1d2433"),
+            "block-hover-background": parse_rgb_env("TANKUOS_THEME_BG", "#11141d"),
         })
 
     def compose(self) -> ComposeResult:
@@ -238,7 +319,6 @@ Seen: {seen}
             detail = self.query_one("#detail", RichLog)
             detail.clear()
             detail.write(text)
-            # Scroll to top after showing new message
             scroll = self.query_one("#detail-scroll", VerticalScroll)
             scroll.scroll_to(y=0)
 
@@ -266,7 +346,6 @@ Seen: {seen}
     @on(Key)
     def on_key(self, event: Key) -> None:
         """Handle key events at app level."""
-        # Don't intercept keys when search input is focused
         search = self.query_one("#search", Input)
         if search.has_focus:
             return
@@ -346,7 +425,6 @@ Seen: {seen}
             conn.commit()
             update_sync_state(conn, acc_name, 1, new_count, 0)
         self.query_messages("")
-
 
     def action_report_spam(self):
         """Report selected message as spam."""
