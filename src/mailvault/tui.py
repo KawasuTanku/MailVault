@@ -18,6 +18,10 @@ class MailVaultTUI(App):
     """Classic email client TUI."""
 
     CSS = """
+    :root {
+        --textual-selection-background: $accent;
+        --textual-selection-foreground: $background;
+    }
     Screen {
         layout: grid;
         grid-size: 1;
@@ -128,6 +132,8 @@ class MailVaultTUI(App):
             "error": rgb_env("TANKUOS_THEME_ERROR", "#ff6b6b"),
             "warning": rgb_env("TANKUOS_THEME_WARNING", "#f0c674"),
             "success": rgb_env("TANKUOS_THEME_SUCCESS", "#98c379"),
+            "screen-selection-background": rgb_env("TANKUOS_THEME_ACCENT", "#6cb6ff"),
+            "screen-selection-foreground": rgb_env("TANKUOS_THEME_BG", "#11141d"),
         })
 
     def compose(self) -> ComposeResult:
