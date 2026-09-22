@@ -10,6 +10,7 @@ dependencies = [
 ]
 
 [project.scripts]
+MailVault = "mailvault.cli:main"
 mailvault = "mailvault.cli:main"
 
 [build-system]

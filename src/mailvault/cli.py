@@ -12,6 +12,7 @@ from .sync import (
     HimalayaError,
 )
 from .io import export_all, import_from_jsonl
+from .import_eml import import_eml
 from .tui import run_tui
 from .spam_cli import spam
 from .show_cli import show
@@ -27,6 +28,7 @@ def main():
 main.add_command(spam)
 main.add_command(show)
 main.add_command(reprocess)
+main.add_command(import_eml)
 
 
 @main.command()
