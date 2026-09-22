@@ -18,10 +18,6 @@ class MailVaultTUI(App):
     """Classic email client TUI."""
 
     CSS = """
-    :root {
-        --textual-selection-background: $accent;
-        --textual-selection-foreground: $background;
-    }
     Screen {
         layout: grid;
         grid-size: 1;
