@@ -123,6 +123,7 @@ class MailVaultTUI(App):
             "background": rgb_env("TANKUOS_THEME_BG", "#11141d"),
             "foreground": rgb_env("TANKUOS_THEME_FG", "#c8d0dc"),
             "surface": rgb_env("TANKUOS_THEME_PANEL", "#1d2433"),
+            "panel": rgb_env("TANKUOS_THEME_PANEL", "#1d2433"),
             "boost": rgb_env("TANKUOS_THEME_SECONDARY", "#2d3a55"),
             "error": rgb_env("TANKUOS_THEME_ERROR", "#ff6b6b"),
             "warning": rgb_env("TANKUOS_THEME_WARNING", "#f0c674"),
