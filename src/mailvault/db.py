@@ -129,8 +129,8 @@ def is_message_id_synced(conn: sqlite3.Connection, message_id: str) -> bool:
     return row is not None
 
 
-def search(conn: sqlite3.Connection, query: str, account: Optional[str] = None, limit: int = 20) -> list:
-    """Full-text search across subject and body."""
+def search(conn: sqlite3.Connection, query: str, account: Optional[str] = None, limit: int = 20, offset: int = 0) -> list:
+    """Full-text search across subject and body with pagination."""
     sql = """
         SELECT m.id, m.account, m.subject, m.from_name, m.from_addr,
                m.date, m.seen, snippet(messages_fts, 2, '[', ']', '...', 32) as snip
@@ -142,8 +142,8 @@ def search(conn: sqlite3.Connection, query: str, account: Optional[str] = None, 
     if account:
         sql += " AND m.account = ?"
         params.append(account)
-    sql += " ORDER BY rank LIMIT ?"
-    params.append(limit)
+    sql += " ORDER BY rank LIMIT ? OFFSET ?"
+    params.extend([limit, offset])
     return [dict(row) for row in conn.execute(sql, params).fetchall()]
 
 

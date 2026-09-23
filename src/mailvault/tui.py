@@ -105,6 +105,8 @@ class MailVaultTUI(App):
         ("j", "cursor_down", "Down"),
         ("k", "cursor_up", "Up"),
         ("enter", "open_message", "Open"),
+        ("n", "next_page", "Next page"),
+        ("p", "previous_page", "Prev page"),
         ("v", "view_raw", "View Raw"),
         ("r", "toggle_read", "Read/Unread"),
         ("d", "delete", "Delete"),
@@ -117,6 +119,10 @@ class MailVaultTUI(App):
         self.account = account
         self.initial_query = initial_query
         self._results = []
+        self._offset = 0
+        self._page_size = 100
+        self._total_count = 0
+        self._last_query = ""
 
         # Apply TankuOS theme via TANKUOS_THEME_* env vars (injected by PTY host)
         self.stylesheet.set_variables({
@@ -247,17 +253,35 @@ class MailVaultTUI(App):
                 data={"account": acc.get("name", "default")},
             )
 
-    def query_messages(self, query):
+    def query_messages(self, query, offset=0):
         conn = get_db()
+        self._offset = offset
+        self._last_query = query
         if query:
-            results = search(conn, query, account=self.account, limit=100)
+            # Count total matches
+            count_sql = "SELECT COUNT(*) FROM messages_fts WHERE messages_fts MATCH ?"
+            params = [query]
+            if self.account:
+                count_sql += " AND account = ?"
+                params.append(self.account)
+            self._total_count = conn.execute(count_sql, params).fetchone()[0]
+            results = search(conn, query, account=self.account, limit=self._page_size, offset=offset)
         else:
+            # Count total messages
+            count_sql = "SELECT COUNT(*) FROM messages"
+            params = []
+            if self.account:
+                count_sql += " WHERE account = ?"
+                params.append(self.account)
+            self._total_count = conn.execute(count_sql, params).fetchone()[0]
+            
             sql = "SELECT * FROM messages"
             params = []
             if self.account:
                 sql += " WHERE account = ?"
                 params.append(self.account)
-            sql += " ORDER BY date DESC LIMIT 100"
+            sql += " ORDER BY date DESC LIMIT ? OFFSET ?"
+            params.extend([self._page_size, offset])
             results = [dict(r) for r in conn.execute(sql, params).fetchall()]
         self._results = results
         self._update_list()
@@ -277,8 +301,10 @@ class MailVaultTUI(App):
                 key=str(r.get("id", "")),
             )
         stats_data = stats(get_db())
+        page_end = min(self._offset + len(self._results), self._total_count)
+        page_label = f"Page {self._offset // self._page_size + 1}/{(self._total_count + self._page_size - 1) // self._page_size}"
         self.query_one("#status", Static).update(
-            f"Total: {stats_data['total']} | Showing: {len(self._results)} | Account: {self.account or 'All'}"
+            f"Total: {stats_data['total']} | Showing {self._offset+1}-{page_end}/{self._total_count} | {page_label} | Account: {self.account or 'All'}"
         )
 
     def _show_detail(self, row_index):
@@ -383,6 +409,18 @@ Seen: {seen}
             self.account = event.node.data.get("account")
             self.sub_title = self.account or "All Accounts"
             self.query_messages("")
+
+    def action_next_page(self):
+        """Load next page of results."""
+        next_offset = self._offset + self._page_size
+        if next_offset < self._total_count:
+            self.query_messages(self._last_query, offset=next_offset)
+
+    def action_previous_page(self):
+        """Load previous page of results."""
+        prev_offset = self._offset - self._page_size
+        if prev_offset >= 0:
+            self.query_messages(self._last_query, offset=prev_offset)
 
     def action_focus_search(self):
         self.query_one("#search", Input).focus()
