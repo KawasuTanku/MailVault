@@ -102,8 +102,6 @@ class MailVaultTUI(App):
         ("/", "focus_search", "Search"),
         ("q", "quit", "Quit"),
         ("s", "sync", "Sync"),
-        ("j", "cursor_down", "Down"),
-        ("k", "cursor_up", "Up"),
         ("enter", "open_message", "Open"),
         ("n", "next_page", "Next page"),
         ("p", "previous_page", "Prev page"),
@@ -383,6 +381,14 @@ Seen: {seen}
             self._show_detail(table.cursor_row)
             event.prevent_default()
         elif event.key == "k":
+            table.action_cursor_up()
+            self._show_detail(table.cursor_row)
+            event.prevent_default()
+        elif event.key == "down":
+            table.action_cursor_down()
+            self._show_detail(table.cursor_row)
+            event.prevent_default()
+        elif event.key == "up":
             table.action_cursor_up()
             self._show_detail(table.cursor_row)
             event.prevent_default()
