@@ -8,7 +8,7 @@ from textual.widgets import DataTable, Footer, Header, Input, Static, Tree, Rich
 from textual import on
 from textual.events import Key
 
-from .db import get_db, search, stats
+from .db import get_db, search, stats, delete_message, mark_read
 from .sync import list_accounts
 from .spam import report_spam_using_himalaya, PROVIDERS
 from .header_analysis import analyze_headers, format_source_report
@@ -424,6 +424,36 @@ Seen: {seen}
 
     def action_focus_search(self):
         self.query_one("#search", Input).focus()
+
+    def _delete(self):
+        """Delete the message at the cursor row."""
+        table = self.query_one("#messages", DataTable)
+        if table.cursor_row is None or not self._results:
+            return
+        row = self._results[table.cursor_row]
+        conn = get_db()
+        if delete_message(conn, row["id"]):
+            self.query_one("#status", Static).update(
+                f"Deleted message {row['id']}"
+            )
+            self.query_messages(self._last_query, offset=self._offset)
+        else:
+            self.query_one("#status", Static).update("Delete failed")
+
+    def _toggle_read(self):
+        """Toggle read/unread on the message at the cursor row."""
+        table = self.query_one("#messages", DataTable)
+        if table.cursor_row is None or not self._results:
+            return
+        row = self._results[table.cursor_row]
+        new_seen = 0 if row.get("seen") else 1
+        conn = get_db()
+        mark_read(conn, row["id"], new_seen)
+        row["seen"] = new_seen
+        status_str = "Read" if new_seen else "Unread"
+        self.query_one("#status", Static).update(
+            f"Marked {status_str} (id {row['id']})"
+        )
 
     def action_sync(self):
         from .sync import get_envelopes, get_raw_message, parse_raw_message, HimalayaError

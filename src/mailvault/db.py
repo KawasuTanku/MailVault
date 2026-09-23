@@ -157,6 +157,19 @@ def stats(conn: sqlite3.Connection) -> dict:
     return {"total": total, "accounts": per_account}
 
 
+def delete_message(conn: sqlite3.Connection, msg_id: int) -> bool:
+    """Delete a message by local id. Returns True if a row was deleted."""
+    cur = conn.execute("DELETE FROM messages WHERE id = ?", (msg_id,))
+    conn.commit()
+    return cur.rowcount > 0
+
+
+def mark_read(conn: sqlite3.Connection, msg_id: int, seen: int) -> None:
+    """Set seen flag on a message."""
+    conn.execute("UPDATE messages SET seen = ? WHERE id = ?", (seen, msg_id))
+    conn.commit()
+
+
 def get_sync_state(conn: sqlite3.Connection, account: str) -> Optional[dict]:
     """Get sync state for an account."""
     row = conn.execute("SELECT * FROM sync_state WHERE account = ?", (account,)).fetchone()
